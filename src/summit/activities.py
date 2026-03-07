@@ -13,6 +13,7 @@ Metadata cache: ~/.cache/garmin/activity_meta/YYYY.json
   - Merged/upserted on each run by activityId
 """
 
+import argparse
 import json
 import subprocess
 import sys
@@ -33,7 +34,6 @@ from summit.credentials import get_credential
 # ---------------------------------------------------------------------------
 
 CACHE_DIR = Path.home() / ".cache" / "garmin" / "activity_meta"
-OUTPUT_FILE = Path.home() / "dropbox" / "org" / "activities.org"
 
 # Human-readable labels for Garmin typeKey values
 TYPE_LABELS = {
@@ -319,16 +319,24 @@ def generate_org(by_week: dict, intensity_by_week: dict, year: int) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+def parse_args():
+    p = argparse.ArgumentParser(description="Generate YTD activity summary")
+    p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
+    p.add_argument("--output", default=None, help="Write output to file (default: stdout)")
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
     year = datetime.now().year
     start_date = f"{year}-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
 
-    print(f">>> Loading cache for {year}...")
+    print(f">>> Loading cache for {year}...", file=sys.stderr)
     by_id = load_cache(year)
-    print(f"    Cached: {len(by_id)} activities")
+    print(f"    Cached: {len(by_id)} activities", file=sys.stderr)
 
-    print(f">>> Fetching activity list from Garmin ({start_date} → {end_date})...")
+    print(f">>> Fetching activity list from Garmin ({start_date} → {end_date})...", file=sys.stderr)
     client = None
     try:
         user = get_credential("garmin", "username")
@@ -336,13 +344,13 @@ def main():
         client = Garmin(user, passwd)
         client.login()
         raw = fetch_activities(client, start_date, end_date)
-        print(f"    Fetched: {len(raw)} activities from API")
+        print(f"    Fetched: {len(raw)} activities from API", file=sys.stderr)
     except Exception as e:
         if by_id:
-            print(f"    Warning: Garmin API failed ({e}), using cache only")
+            print(f"    Warning: Garmin API failed ({e}), using cache only", file=sys.stderr)
             raw = []
         else:
-            print(f"    Error: Garmin API failed and no cache available: {e}")
+            print(f"    Error: Garmin API failed and no cache available: {e}", file=sys.stderr)
             sys.exit(1)
 
     # Upsert into cache
@@ -359,9 +367,9 @@ def main():
             updated_count += 1
         by_id[aid] = meta
 
-    print(f"    New: {new_count}  Updated: {updated_count} activities")
+    print(f"    New: {new_count}  Updated: {updated_count} activities", file=sys.stderr)
     save_cache(year, by_id)
-    print(f"    Cache saved: {cache_path(year)}")
+    print(f"    Cache saved: {cache_path(year)}", file=sys.stderr)
 
     # Group by ISO week ("YYYY-Www")
     by_week: dict = {}
@@ -382,7 +390,7 @@ def main():
         by_week.setdefault(week_key, []).append(meta)
 
     # Fetch weekly intensity minutes
-    print(f">>> Fetching weekly intensity minutes ({start_date} → {end_date})...")
+    print(f">>> Fetching weekly intensity minutes ({start_date} → {end_date})...", file=sys.stderr)
     intensity_by_week: dict = {}
     try:
         if client is None:
@@ -396,27 +404,35 @@ def main():
             iso_year, iso_week, _ = dt.isocalendar()
             if iso_year == year:
                 intensity_by_week[iso_week] = entry
-        print(f"    Got {len(intensity_by_week)} weeks of intensity data")
+        print(f"    Got {len(intensity_by_week)} weeks of intensity data", file=sys.stderr)
     except Exception as e:
-        print(f"    Warning: intensity minutes fetch failed ({e}), skipping")
+        print(f"    Warning: intensity minutes fetch failed ({e}), skipping", file=sys.stderr)
 
-    # Write org file
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    content = generate_org(by_week, intensity_by_week, year)
-    OUTPUT_FILE.write_text(content)
-    print(f">>> Written: {OUTPUT_FILE}")
-    print(f"    Weeks: {len(by_week)}  Total activities: {len(by_id)}")
+    # Generate output
+    if args.format == "org":
+        content = generate_org(by_week, intensity_by_week, year)
+    else:
+        content = json.dumps(list(by_id.values()), indent=2)
 
-    # Sync to Dropbox (local wins)
-    print(">>> Syncing to Dropbox...")
-    try:
-        subprocess.run(
-            ["rclone", "copyto", str(OUTPUT_FILE), "dropbox:/org/activities.org"],
-            check=True, capture_output=True,
-        )
-        print("    ✓ Synced")
-    except Exception as e:
-        print(f"    Warning: rclone sync failed ({e})")
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(content)
+        print(f">>> Written: {out_path}", file=sys.stderr)
+        print(f"    Weeks: {len(by_week)}  Total activities: {len(by_id)}", file=sys.stderr)
+        # Sync to Dropbox only when writing an org file
+        if args.format == "org":
+            print(">>> Syncing to Dropbox...", file=sys.stderr)
+            try:
+                subprocess.run(
+                    ["rclone", "copyto", str(out_path), "dropbox:/org/activities.org"],
+                    check=True, capture_output=True,
+                )
+                print("    ✓ Synced", file=sys.stderr)
+            except Exception as e:
+                print(f"    Warning: rclone sync failed ({e})", file=sys.stderr)
+    else:
+        print(content)
 
 
 if __name__ == "__main__":

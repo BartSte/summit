@@ -17,6 +17,7 @@ from summit.activities import (
     iso_week_date_range,
     load_cache,
     org_table,
+    parse_args,
     save_cache,
     summary_table,
     type_label,
@@ -394,3 +395,31 @@ class TestCacheFunctions:
         cache_file.write_text("not valid json {{{")
         result = load_cache(2024)
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# parse_args — --format and --output flags
+# ---------------------------------------------------------------------------
+
+class TestActivitiesParseArgs:
+    def _parse(self, argv, monkeypatch):
+        import sys
+        monkeypatch.setattr(sys, "argv", ["summit-activities"] + argv)
+        return parse_args()
+
+    def test_default_format_is_json(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.format == "json"
+
+    def test_format_org(self, monkeypatch):
+        args = self._parse(["--format", "org"], monkeypatch)
+        assert args.format == "org"
+
+    def test_output_default_is_none(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.output is None
+
+    def test_output_flag(self, monkeypatch, tmp_path):
+        out = str(tmp_path / "activities.org")
+        args = self._parse(["--output", out], monkeypatch)
+        assert args.output == out

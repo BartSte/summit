@@ -41,8 +41,9 @@ def parse_args():
     p.add_argument("--start", help="YYYY-MM-DD (overrides --range)")
     p.add_argument("--end", help="YYYY-MM-DD (overrides --range)")
     p.add_argument("--limit-activities", type=int, default=None, help="Limit number of activities (debug)")
-    p.add_argument("--output", default=None, help="Write JSON output to file")
+    p.add_argument("--output", default=None, help="Write output to file")
     p.add_argument("--top", type=int, default=10, help="Number of fastest matches to include")
+    p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
     return p.parse_args()
 
 
@@ -395,6 +396,33 @@ def main():
                 res["best_seconds"] = duration
                 res["activity"] = entry
 
+    def render_org(out_dict: dict) -> str:
+        lines = ["", "* Segment KOMs", ""]
+        for segment_name in sorted(out_dict.keys()):
+            data = out_dict[segment_name]
+            lines.append(f"** {segment_name}")
+            distance_km = data.get("distance_m", 0) / 1000.0
+            ascent_m = data.get("ascent_m", 0)
+            descent_m = data.get("descent_m", 0)
+            lines.append(f"- Distance: {distance_km:.2f} km")
+            lines.append(f"- Ascent: {ascent_m:.0f} m")
+            lines.append(f"- Descent: {descent_m:.0f} m")
+            if data.get("best"):
+                lines.append(f"- Best: {data['best']} (KOM)")
+                lines.append(f"- Matches: {data['matches']} times")
+            else:
+                lines.append("- Best: no matches")
+            lines.append("")
+            lines.append("| Rank | Time | Avg speed | Date |")
+            lines.append("|------|------|-----------|------|")
+            for idx, activity in enumerate(data.get("top", [])[:10], 1):
+                time_hms = format_duration(activity["duration_s"])
+                date = (activity.get("startTimeLocal") or "").split()[0]
+                avg_speed = activity.get("avg_speed_kmh", 0)
+                lines.append(f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {date} |")
+            lines.append("")
+        return "\n".join(lines)
+
     # Output
     out = {}
     for name, res in results.items():
@@ -420,17 +448,15 @@ def main():
                 "descent_m": res["descent_m"],
             }
 
-    if args.output:
-        Path(args.output).write_text(json.dumps(out, indent=2))
+    if args.format == "org":
+        content = render_org(out)
     else:
-        for name, res in out.items():
-            if res.get("best") is None:
-                print(f"{name}: no matches")
-            else:
-                act = res.get("activity") or {}
-                print(f"{name}: {res['best']} (matches: {res['matches']}, activity: {act.get('name')} @ {act.get('startTimeLocal')})")
-                for i, t in enumerate(res.get("top", []), 1):
-                    print(f"  {i:02d}. {format_duration(t['duration_s'])} | {t.get('startTimeLocal')} | {t.get('name')}")
+        content = json.dumps(out, indent=2)
+
+    if args.output:
+        Path(args.output).write_text(content)
+    else:
+        print(content)
 
 
 if __name__ == "__main__":

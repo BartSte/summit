@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from summit.org import kom_json_to_org, seconds_to_hms
+from summit.org import _render_org, kom_json_to_org, seconds_to_hms
 
 
 # ---------------------------------------------------------------------------
@@ -27,50 +27,33 @@ def test_seconds_to_hms(seconds, expected):
 
 
 # ---------------------------------------------------------------------------
-# kom_json_to_org
+# kom_json_to_org (returns a string now)
 # ---------------------------------------------------------------------------
 
 class TestKomJsonToOrg:
-    def test_creates_output_file_when_missing(self, tmp_path, sample_kom_data):
+    def test_returns_org_string(self, tmp_path, sample_kom_data):
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(sample_kom_data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        assert out_file.exists()
-        content = out_file.read_text()
-        assert "* Segment KOMs" in content
+        assert isinstance(result, str)
+        assert "* Segment KOMs" in result
 
-    def test_appends_to_existing_file(self, tmp_path, sample_kom_data):
-        kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
-        kom_file.write_text(json.dumps(sample_kom_data))
-        out_file.write_text("* Existing Content\n")
-
-        kom_json_to_org(str(kom_file), str(out_file))
-
-        content = out_file.read_text()
-        assert "* Existing Content" in content
-        assert "* Segment KOMs" in content
-
-    def test_missing_input_file_is_skipped(self, tmp_path, capsys):
-        out_file = tmp_path / "records.org"
-        kom_json_to_org(str(tmp_path / "nonexistent.json"), str(out_file))
+    def test_missing_input_file_returns_empty(self, tmp_path, capsys):
+        result = kom_json_to_org(str(tmp_path / "nonexistent.json"))
         captured = capsys.readouterr()
+        assert result == ""
         assert "Warning" in captured.out
-        assert not out_file.exists()
 
     def test_segment_names_as_headings(self, tmp_path, sample_kom_data):
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(sample_kom_data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        assert "** SEG-Test Hill" in content
-        assert "** SEG-Flat Sprint" in content
+        assert "** SEG-Test Hill" in result
+        assert "** SEG-Flat Sprint" in result
 
     def test_segments_sorted_alphabetically(self, tmp_path):
         data = {
@@ -90,44 +73,37 @@ class TestKomJsonToOrg:
             },
         }
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        pos_a = content.index("SEG-A Segment")
-        pos_z = content.index("SEG-Z Segment")
-        assert pos_a < pos_z  # A comes before Z
+        pos_a = result.index("SEG-A Segment")
+        pos_z = result.index("SEG-Z Segment")
+        assert pos_a < pos_z
 
     def test_org_table_structure(self, tmp_path, sample_kom_data):
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(sample_kom_data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        assert "| Rank | Time | Avg speed | Date |" in content
-        assert "|------|------|-----------|------|" in content
+        assert "| Rank | Time | Avg speed | Date |" in result
+        assert "|------|------|-----------|------|" in result
 
     def test_distance_and_ascent_in_output(self, tmp_path, sample_kom_data):
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(sample_kom_data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        # SEG-Test Hill has distance_m=2350, ascent_m=50
-        assert "2.35 km" in content
-        assert "50 m" in content
+        assert "2.35 km" in result
+        assert "50 m" in result
 
     def test_top_times_limited_to_10(self, tmp_path):
         top = [
             {"id": i, "name": f"Ride{i}", "startTimeLocal": f"2024-01-{i:02d} 09:00:00",
              "duration_s": 300.0 + i, "avg_speed_kmh": 20.0}
-            for i in range(1, 16)  # 15 entries
+            for i in range(1, 16)
         ]
         data = {
             "SEG-Many": {
@@ -139,22 +115,70 @@ class TestKomJsonToOrg:
             }
         }
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps(data))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        # Only first 10 should appear: row 10 "| 10 |" should be present, 11 should not
-        assert "| 10 |" in content
-        assert "| 11 |" not in content
+        assert "| 10 |" in result
+        assert "| 11 |" not in result
 
     def test_empty_kom_data(self, tmp_path):
         kom_file = tmp_path / "kom.json"
-        out_file = tmp_path / "records.org"
         kom_file.write_text(json.dumps({}))
 
-        kom_json_to_org(str(kom_file), str(out_file))
+        result = kom_json_to_org(str(kom_file))
 
-        content = out_file.read_text()
-        assert "* Segment KOMs" in content
+        assert "* Segment KOMs" in result
+
+
+# ---------------------------------------------------------------------------
+# --format flag via main()
+# ---------------------------------------------------------------------------
+
+class TestOrgMain:
+    def _run(self, argv, monkeypatch):
+        import sys
+        from summit.org import main
+        monkeypatch.setattr(sys, "argv", ["summit-org"] + argv)
+        main()
+
+    def test_format_json_prints_json(self, tmp_path, sample_kom_data, monkeypatch, capsys):
+        kom_file = tmp_path / "kom.json"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        self._run(["--format", "json", str(kom_file)], monkeypatch)
+
+        out = capsys.readouterr().out
+        parsed = json.loads(out)
+        assert "SEG-Test Hill" in parsed
+
+    def test_format_org_prints_org(self, tmp_path, sample_kom_data, monkeypatch, capsys):
+        kom_file = tmp_path / "kom.json"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        self._run(["--format", "org", str(kom_file)], monkeypatch)
+
+        out = capsys.readouterr().out
+        assert "* Segment KOMs" in out
+        assert "** SEG-Test Hill" in out
+
+    def test_output_file_written(self, tmp_path, sample_kom_data, monkeypatch, capsys):
+        kom_file = tmp_path / "kom.json"
+        out_file = tmp_path / "out.org"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        self._run(["--format", "org", "--output", str(out_file), str(kom_file)], monkeypatch)
+
+        assert out_file.exists()
+        assert "* Segment KOMs" in out_file.read_text()
+
+    def test_output_file_json(self, tmp_path, sample_kom_data, monkeypatch, capsys):
+        kom_file = tmp_path / "kom.json"
+        out_file = tmp_path / "out.json"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        self._run(["--format", "json", "--output", str(out_file), str(kom_file)], monkeypatch)
+
+        assert out_file.exists()
+        parsed = json.loads(out_file.read_text())
+        assert "SEG-Test Hill" in parsed

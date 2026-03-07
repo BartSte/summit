@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert segment KOM JSON to org-mode format and append to personal_records.org"""
+"""Convert segment KOM JSON to org-mode format."""
 import argparse
 import json
 import sys
@@ -15,61 +15,52 @@ def seconds_to_hms(seconds):
     return f"{hours:02d}:{minutes:02d}:{secs:02d}" if hours > 0 else f"{minutes:02d}:{secs:02d}"
 
 
-def kom_json_to_org(kom_json_path, output_path):
-    """Convert KOM JSON to org-mode and append to personal_records.org"""
-
+def kom_json_to_org(kom_json_path) -> str:
+    """Convert KOM JSON file to org-mode string. Returns empty string if file not found."""
     if not Path(kom_json_path).exists():
         print(f"Warning: KOM JSON file not found: {kom_json_path}")
-        return
+        return ""
 
     with open(kom_json_path) as f:
         kom_data = json.load(f)
 
-    # Build org-mode content
+    return _render_org(kom_data)
+
+
+def _render_org(kom_data: dict) -> str:
+    """Render KOM data dict as org-mode string."""
     org_lines = []
     org_lines.append("")
     org_lines.append("* Segment KOMs")
     org_lines.append("")
 
-    # Sort segments by name
     for segment_name in sorted(kom_data.keys()):
         data = kom_data[segment_name]
         org_lines.append(f"** {segment_name}")
 
-        # Segment information
         distance_km = data.get('distance_m', 0) / 1000.0
         ascent_m = data.get('ascent_m', 0)
         descent_m = data.get('descent_m', 0)
         org_lines.append(f"- Distance: {distance_km:.2f} km")
         org_lines.append(f"- Ascent: {ascent_m:.0f} m")
         org_lines.append(f"- Descent: {descent_m:.0f} m")
-        org_lines.append(f"- Best: {data['best']} (KOM)")
-        org_lines.append(f"- Matches: {data['matches']} times")
+        if data.get('best'):
+            org_lines.append(f"- Best: {data['best']} (KOM)")
+            org_lines.append(f"- Matches: {data['matches']} times")
         org_lines.append("")
 
-        # Top 10 times table with new columns
         org_lines.append("| Rank | Time | Avg speed | Date |")
         org_lines.append("|------|------|-----------|------|")
 
         for idx, activity in enumerate(data.get('top', [])[:10], 1):
             time_hms = seconds_to_hms(activity['duration_s'])
-            date = activity['startTimeLocal'].split()[0]  # Get date only
+            date = activity['startTimeLocal'].split()[0]
             avg_speed = activity.get('avg_speed_kmh', 0)
             org_lines.append(f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {date} |")
 
         org_lines.append("")
 
-    # Append to output file
-    org_content = "\n".join(org_lines)
-
-    if Path(output_path).exists():
-        with open(output_path, 'a') as f:
-            f.write(org_content)
-    else:
-        with open(output_path, 'w') as f:
-            f.write(org_content)
-
-    print(f"✓ Appended segment KOMs to {output_path}")
+    return "\n".join(org_lines)
 
 
 def main():
@@ -81,13 +72,32 @@ def main():
         help="Path to KOM JSON file (default: /tmp/kom_results.json)",
     )
     parser.add_argument(
-        "output_file",
-        nargs="?",
-        default=str(Path.home() / "dropbox/org/personal_records.org"),
-        help="Output org file to append to",
+        "--format", choices=["json", "org"], default="json",
+        help="Output format (default: json)",
+    )
+    parser.add_argument(
+        "--output", default=None,
+        help="Write output to file instead of stdout",
     )
     args = parser.parse_args()
-    kom_json_to_org(args.kom_json, args.output_file)
+
+    if args.format == "json":
+        if not Path(args.kom_json).exists():
+            print(f"Warning: KOM JSON file not found: {args.kom_json}")
+            sys.exit(1)
+        with open(args.kom_json) as f:
+            data = json.load(f)
+        content = json.dumps(data, indent=2)
+    else:
+        content = kom_json_to_org(args.kom_json)
+        if not content:
+            sys.exit(1)
+
+    if args.output:
+        Path(args.output).write_text(content)
+        print(f"✓ Written to {args.output}")
+    else:
+        print(content)
 
 
 if __name__ == "__main__":

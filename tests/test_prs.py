@@ -16,6 +16,7 @@ from summit.prs import (
     ensure_cache_dirs,
     haversine_m,
     load_cached_track,
+    parse_args,
     parse_gpx_text,
     parse_time,
     resolve_range,
@@ -345,3 +346,35 @@ class TestCacheHelpers:
         loaded = load_cached_track(tmp_cache_dir, 88888)
         assert loaded is not None
         assert loaded[0][3] is None
+
+
+# ---------------------------------------------------------------------------
+# parse_args — --format flag
+# ---------------------------------------------------------------------------
+
+class TestParseArgs:
+    def _parse(self, argv, monkeypatch):
+        import sys
+        monkeypatch.setattr(sys, "argv", ["summit-prs"] + argv)
+        return parse_args()
+
+    def test_default_format_is_json(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.format == "json"
+
+    def test_format_org(self, monkeypatch):
+        args = self._parse(["--format", "org"], monkeypatch)
+        assert args.format == "org"
+
+    def test_format_json_explicit(self, monkeypatch):
+        args = self._parse(["--format", "json"], monkeypatch)
+        assert args.format == "json"
+
+    def test_output_default_is_none(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.output is None
+
+    def test_output_flag(self, monkeypatch, tmp_path):
+        out = str(tmp_path / "out.json")
+        args = self._parse(["--output", out], monkeypatch)
+        assert args.output == out

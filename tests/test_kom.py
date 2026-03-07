@@ -15,6 +15,7 @@ from summit.kom import (
     haversine_m,
     match_segment,
     nearest_segment_index,
+    parse_args,
     parse_time,
     read_gpx_points,
     resolve_range,
@@ -304,3 +305,30 @@ def test_resolve_range_this_year():
     args = SimpleNamespace(start=None, end=None, range="this_year")
     start, end = resolve_range(args)
     assert start.month == 1 and start.day == 1
+
+
+# ---------------------------------------------------------------------------
+# parse_args — --format flag
+# ---------------------------------------------------------------------------
+
+class TestParseArgs:
+    def _parse(self, argv, monkeypatch):
+        import sys
+        monkeypatch.setattr(sys, "argv", ["summit-kom"] + argv)
+        return parse_args()
+
+    def test_default_format_is_json(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.format == "json"
+
+    def test_format_org(self, monkeypatch):
+        args = self._parse(["--format", "org"], monkeypatch)
+        assert args.format == "org"
+
+    def test_format_json_explicit(self, monkeypatch):
+        args = self._parse(["--format", "json"], monkeypatch)
+        assert args.format == "json"
+
+    def test_output_default_is_none(self, monkeypatch):
+        args = self._parse([], monkeypatch)
+        assert args.output is None

@@ -46,7 +46,8 @@ def parse_args():
     p.add_argument("--top", type=int, default=10, help="Number of fastest results to include per distance")
     p.add_argument("--time-mode", choices=["elapsed", "moving"], default="elapsed", help="Use elapsed or moving time")
     p.add_argument("--moving-threshold-m", type=float, default=1.0, help="Distance threshold below which time is ignored in moving mode")
-    p.add_argument("--output", default=None, help="Write JSON output to file")
+    p.add_argument("--output", default=None, help="Write output to file")
+    p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
     return p.parse_args()
 
 
@@ -365,27 +366,15 @@ def main():
                 lines.append(fmt_row(r))
         return "\n".join(lines) + "\n"
 
-    if args.output:
-        out_path = Path(args.output)
-        if out_path.suffix == ".org":
-            out_path.write_text(render_org(results))
-        else:
-            out_path.write_text(json.dumps(results, indent=2))
+    if args.format == "org":
+        content = render_org(results)
     else:
-        for dist in distances_km:
-            key = str(dist)
-            print(f"{dist:.1f} km:")
-            rows = results.get(key, [])
-            if not rows:
-                print("  no results")
-                continue
-            for i, r in enumerate(rows, 1):
-                d = r["duration_s"]
-                h = int(d // 3600)
-                m = int((d % 3600) // 60)
-                s = int(d % 60)
-                time_str = f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:d}:{s:02d}"
-                print(f"  {i:02d}. {time_str} | {r['avg_kmh']:.1f} km/h | {r.get('startTimeLocal')} | {r.get('activityName')}")
+        content = json.dumps(results, indent=2)
+
+    if args.output:
+        Path(args.output).write_text(content)
+    else:
+        print(content)
 
 
 if __name__ == "__main__":
