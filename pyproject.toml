@@ -25,5 +25,15 @@ summit-generate     = "summit.cli.generate:main"
 summit-auto-update  = "summit.cli.auto_update:main"
 komoot              = "summit.komoot:main"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/summit"]
