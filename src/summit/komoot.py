@@ -2,10 +2,10 @@
 """Komoot helper CLI using komPYoot + direct API PATCH.
 
 Usage examples:
-  komoot_cli.py list-planned
-  komoot_cli.py rename --id 123 --name "New Name"
-  komoot_cli.py bulk-prefix --old "LE-" --new "L-"
-  komoot_cli.py download-segments --prefix "SEG-" --cache-dir /home/barts/.cache/garmin/segments
+  komoot list-planned
+  komoot rename --id 123 --name "New Name"
+  komoot bulk-prefix --old "LE-" --new "L-"
+  komoot download-segments --prefix "SEG-" --cache-dir /home/barts/.cache/garmin/segments
 """
 
 import argparse

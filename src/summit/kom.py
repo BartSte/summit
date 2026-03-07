@@ -274,7 +274,7 @@ def main():
 
     segments_dir = Path(args.segments_dir)
     if not segments_dir.exists():
-        raise SystemExit(f"Segments directory not found: {segments_dir}\nDownload segments first with: komoot_cli.py download-segments")
+        raise SystemExit(f"Segments directory not found: {segments_dir}\nDownload segments first with: komoot download-segments")
 
     # Load segments
     segments = []
@@ -286,11 +286,11 @@ def main():
         if not points:
             continue
         seg_name = gpx_name or name
-        
+
         # Calculate segment metrics
         distance_m = calculate_distance_m(points)
         ascent, descent = calculate_elevation_gain_loss(points)
-        
+
         segments.append({
             "name": seg_name,
             "path": str(path),
@@ -376,12 +376,12 @@ def main():
             name = seg["name"]
             res = results[name]
             res["matches"] += 1
-            
+
             # Calculate average speed (km/h)
             distance_km = seg["distance_m"] / 1000.0
             duration_h = duration / 3600.0
             avg_speed_kmh = distance_km / duration_h if duration_h > 0 else 0
-            
+
             entry = {
                 "id": activity_id,
                 "name": act.get("activityName"),
