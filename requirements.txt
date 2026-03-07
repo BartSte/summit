@@ -1,0 +1,5 @@
+garminconnect==0.2.38
+komPYoot>=1.0.5
+gpxpy>=1.6.1
+lxml>=4.9.0
+requests>=2.31.0
