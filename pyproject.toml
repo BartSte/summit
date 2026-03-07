@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "summit"
@@ -27,5 +27,5 @@ test = [
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/summit"]
+[tool.setuptools.packages.find]
+where = ["src"] 
