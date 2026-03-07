@@ -6,7 +6,6 @@ from Garmin activities, reusing the /kom track cache.
 import argparse
 import json
 import math
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -15,6 +14,8 @@ try:
     from garminconnect import Garmin
 except Exception:
     Garmin = None
+
+from summit.credentials import get_credential
 
 CYCLING_TYPES = {
     "cycling",
@@ -265,8 +266,8 @@ def main():
     start_date = start.strftime("%Y-%m-%d")
     end_date = end.strftime("%Y-%m-%d")
 
-    user = os.popen("rbw get --field username 'Garmin Connect'").read().strip()
-    passwd = os.popen("rbw get --field password 'Garmin Connect'").read().strip()
+    user = get_credential("garmin", "username")
+    passwd = get_credential("garmin", "password")
     client = Garmin(user, passwd)
     client.login()
 

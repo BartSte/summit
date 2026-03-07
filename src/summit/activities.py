@@ -26,6 +26,8 @@ except ImportError:
     print("Error: garminconnect not installed. Activate venv first.")
     sys.exit(1)
 
+from summit.credentials import get_credential
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -83,18 +85,6 @@ TYPE_LABELS = {
     "breathwork": "Breathwork",
     "other": "Other",
 }
-
-
-# ---------------------------------------------------------------------------
-# Credentials
-# ---------------------------------------------------------------------------
-
-def rbw_get(service, field=None):
-    cmd = ["rbw", "get"]
-    if field:
-        cmd += ["--field", field]
-    cmd += [service]
-    return subprocess.check_output(cmd, text=True).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -341,8 +331,8 @@ def main():
     print(f">>> Fetching activity list from Garmin ({start_date} → {end_date})...")
     client = None
     try:
-        user = rbw_get("Garmin Connect", "username")
-        passwd = rbw_get("Garmin Connect")
+        user = get_credential("garmin", "username")
+        passwd = get_credential("garmin", "password")
         client = Garmin(user, passwd)
         client.login()
         raw = fetch_activities(client, start_date, end_date)

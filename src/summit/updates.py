@@ -5,7 +5,6 @@ Compares cache state against live data.
 """
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -18,13 +17,7 @@ except Exception as e:
     print("Install with: pip install garminconnect komPYoot")
     sys.exit(1)
 
-
-def rbw_get(service, field=None):
-    cmd = ["rbw", "get"]
-    if field:
-        cmd += ["--field", field]
-    cmd += [service]
-    return subprocess.check_output(cmd, text=True).strip()
+from summit.credentials import get_credential
 
 
 def check_garmin_activities():
@@ -44,8 +37,8 @@ def check_garmin_activities():
 
     # Get latest activity from Garmin
     try:
-        user = rbw_get("Garmin Connect", "username")
-        passwd = rbw_get("Garmin Connect")
+        user = get_credential("garmin", "username")
+        passwd = get_credential("garmin", "password")
         client = Garmin(user, passwd)
         client.login()
 
@@ -84,8 +77,8 @@ def check_komoot_segments():
 
     # Get planned tours from Komoot
     try:
-        user = rbw_get("Komoot", "username")
-        passwd = rbw_get("Komoot")
+        user = get_credential("komoot", "username")
+        passwd = get_credential("komoot", "password")
         api = API()
         ok = api.login(user, passwd)
         if not ok:

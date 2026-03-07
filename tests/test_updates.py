@@ -15,8 +15,8 @@ class TestCheckGarminActivities:
 
     def _patch_rbw(self, monkeypatch):
         monkeypatch.setattr(
-            "summit.updates.rbw_get",
-            lambda service, field=None: "testuser" if field == "username" else "testpass",
+            "summit.updates.get_credential",
+            lambda service, field: "testuser" if field == "username" else "testpass",
         )
 
     def test_new_activity_when_cache_empty(self, tmp_path, monkeypatch):
@@ -137,8 +137,8 @@ class TestCheckKomootSegments:
             (cache_dir / f"{name}.gpx").write_text("")
 
         monkeypatch.setattr(
-            "summit.updates.rbw_get",
-            lambda service, field=None: "user" if field == "username" else "pass",
+            "summit.updates.get_credential",
+            lambda service, field: "user" if field == "username" else "pass",
         )
         mock_api_instance = self._make_mock_api(seg_names)
         monkeypatch.setattr("summit.updates.API", lambda: mock_api_instance)
@@ -162,8 +162,8 @@ class TestCheckKomootSegments:
         cached = ["SEG-Hill", "SEG-Flat"]
 
         monkeypatch.setattr(
-            "summit.updates.rbw_get",
-            lambda service, field=None: "user" if field == "username" else "pass",
+            "summit.updates.get_credential",
+            lambda service, field: "user" if field == "username" else "pass",
         )
         mock_api_instance = self._make_mock_api(planned)
         monkeypatch.setattr("summit.updates.API", lambda: mock_api_instance)
@@ -183,8 +183,8 @@ class TestCheckKomootSegments:
         from summit.updates import check_komoot_segments
 
         monkeypatch.setattr(
-            "summit.updates.rbw_get",
-            lambda service, field=None: "user" if field == "username" else "pass",
+            "summit.updates.get_credential",
+            lambda service, field: "user" if field == "username" else "pass",
         )
         mock_api_instance = MagicMock()
         mock_api_instance.login.return_value = False
@@ -203,8 +203,8 @@ class TestCheckKomootSegments:
         from summit.updates import check_komoot_segments
 
         monkeypatch.setattr(
-            "summit.updates.rbw_get",
-            lambda service, field=None: "user" if field == "username" else "pass",
+            "summit.updates.get_credential",
+            lambda service, field: "user" if field == "username" else "pass",
         )
         mock_api_instance = MagicMock()
         mock_api_instance.login.return_value = True
@@ -220,33 +220,3 @@ class TestCheckKomootSegments:
             info, is_new, err = check_komoot_segments()
             assert err is not None
             assert "connection refused" in err
-
-
-# ---------------------------------------------------------------------------
-# rbw_get helper
-# ---------------------------------------------------------------------------
-
-class TestRbwGet:
-    def test_rbw_get_with_field(self, monkeypatch):
-        import subprocess
-        from summit.updates import rbw_get
-
-        monkeypatch.setattr(
-            subprocess,
-            "check_output",
-            lambda cmd, **kwargs: "myuser\n",
-        )
-        result = rbw_get("Garmin Connect", "username")
-        assert result == "myuser"
-
-    def test_rbw_get_without_field(self, monkeypatch):
-        import subprocess
-        from summit.updates import rbw_get
-
-        monkeypatch.setattr(
-            subprocess,
-            "check_output",
-            lambda cmd, **kwargs: "mypassword\n",
-        )
-        result = rbw_get("Garmin Connect")
-        assert result == "mypassword"

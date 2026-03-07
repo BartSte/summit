@@ -12,13 +12,49 @@ Personal records and KOM detection for Garmin cycling activities, with Komoot se
 pip install garminconnect komPYoot
 ```
 
-**Credentials** (stored in `rbw`):
+## Credentials
+
+Credentials are resolved via environment variables using a two-step priority chain.
+
+### Option 1 — Direct env vars (good for CI / simple setups)
+
 ```bash
-rbw get --field username 'Garmin Connect'  # Garmin username
-rbw get --field password 'Garmin Connect'  # Garmin password
-rbw get --field username 'Komoot'          # Komoot email
-rbw get --field password 'Komoot'          # Komoot password
+export SUMMIT_GARMIN_USERNAME="you@example.com"
+export SUMMIT_GARMIN_PASSWORD="your-garmin-password"
+export SUMMIT_KOMOOT_USERNAME="you@example.com"
+export SUMMIT_KOMOOT_PASSWORD="your-komoot-password"
 ```
+
+### Option 2 — Command env vars (good for password managers)
+
+Set `*_CMD` variants to any shell command whose **stdout** is the credential:
+
+```bash
+# rbw (Bitwarden CLI)
+export SUMMIT_GARMIN_USERNAME_CMD="rbw get --field username 'Garmin Connect'"
+export SUMMIT_GARMIN_PASSWORD_CMD="rbw get 'Garmin Connect'"
+export SUMMIT_KOMOOT_USERNAME_CMD="rbw get --field username 'Komoot'"
+export SUMMIT_KOMOOT_PASSWORD_CMD="rbw get 'Komoot'"
+
+# 1Password CLI
+export SUMMIT_GARMIN_PASSWORD_CMD="op item get 'Garmin Connect' --fields password"
+
+# pass / gopass
+export SUMMIT_GARMIN_PASSWORD_CMD="pass show garmin/password"
+```
+
+### Shell profile example
+
+Add to `~/.zshrc` or `~/.bashrc`:
+
+```bash
+export SUMMIT_GARMIN_USERNAME_CMD="rbw get --field username 'Garmin Connect'"
+export SUMMIT_GARMIN_PASSWORD_CMD="rbw get 'Garmin Connect'"
+export SUMMIT_KOMOOT_USERNAME_CMD="rbw get --field username 'Komoot'"
+export SUMMIT_KOMOOT_PASSWORD_CMD="rbw get 'Komoot'"
+```
+
+If a credential is missing, the tool prints a helpful error showing exactly which env var to set.
 
 ## Cache Directories
 

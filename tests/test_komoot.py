@@ -262,8 +262,8 @@ class TestLogin:
         from summit.komoot import login
 
         monkeypatch.setattr(
-            "summit.komoot.rbw_get",
-            lambda field=None: "test@email.com" if field == "username" else "testpass",
+            "summit.komoot.get_credential",
+            lambda service, field: "test@email.com" if field == "username" else "testpass",
         )
         mock_api = MagicMock()
         mock_api.login.return_value = True
@@ -277,8 +277,8 @@ class TestLogin:
         from summit.komoot import login
 
         monkeypatch.setattr(
-            "summit.komoot.rbw_get",
-            lambda field=None: "test@email.com" if field == "username" else "testpass",
+            "summit.komoot.get_credential",
+            lambda service, field: "test@email.com" if field == "username" else "testpass",
         )
         mock_api = MagicMock()
         mock_api.login.return_value = False

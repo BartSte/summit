@@ -11,7 +11,6 @@ Usage examples:
 import argparse
 import datetime
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -19,20 +18,14 @@ from typing import List, Tuple
 import requests
 from komPYoot.api import API, TourOwner, TourType
 
+from summit.credentials import get_credential
+
 API_BASE = "https://api.komoot.de/v007/tours"
 
 
-def rbw_get(field: str | None = None) -> str:
-    cmd = ["rbw", "get"]
-    if field:
-        cmd += ["--field", field]
-    cmd += ["Komoot"]
-    return subprocess.check_output(cmd, text=True).strip()
-
-
 def login() -> API:
-    email = rbw_get("username")
-    password = rbw_get(None)
+    email = get_credential("komoot", "username")
+    password = get_credential("komoot", "password")
     api = API()
     ok = api.login(email, password)
     if not ok:
