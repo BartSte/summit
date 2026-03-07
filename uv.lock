@@ -588,8 +588,8 @@ dependencies = [
     { name = "requests" },
 ]
 
-[package.optional-dependencies]
-test = [
+[package.dev-dependencies]
+dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -600,11 +600,14 @@ requires-dist = [
     { name = "gpxpy", specifier = ">=1.6.1" },
     { name = "kompyoot", specifier = ">=1.0.5" },
     { name = "lxml", specifier = ">=4.9.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=5.0" },
     { name = "requests", specifier = ">=2.31.0" },
 ]
-provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov", specifier = ">=5.0" },
+]
 
 [[package]]
 name = "tomli"
