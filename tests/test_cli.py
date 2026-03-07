@@ -1,4 +1,247 @@
 """Tests for summit.cli — orchestration commands."""
+# ---------------------------------------------------------------------------
+# cli/main.py — unified CLI dispatcher
+# ---------------------------------------------------------------------------
+
+class TestUnifiedCLI:
+    """Tests for summit.cli.main — the unified `summit` entry point."""
+
+    def _dispatch(self, argv, mock_targets):
+        """
+        Call main() with sys.argv set to argv.
+        mock_targets is a dict of module_path -> MagicMock to patch as `main`.
+        Returns (mock_called, remaining_argv).
+        """
+        import sys
+        from unittest.mock import MagicMock, patch
+        from summit.cli import main as cli_main
+
+        patches = {}
+        for mod_path, mock in mock_targets.items():
+            patches[mod_path] = patch(f"{mod_path}.main", mock)
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = argv
+            with patch.dict("sys.modules", {}):
+                with self._apply_patches(patches):
+                    cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+    @staticmethod
+    def _apply_patches(patches):
+        """Context manager that applies all patches together."""
+        from contextlib import ExitStack
+        stack = ExitStack()
+        for patch_ctx in patches.values():
+            stack.enter_context(patch_ctx)
+        return stack
+
+    def test_prs_routes_to_summit_prs(self):
+        """summit prs → summit.prs.main()"""
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "prs"]
+            with patch("summit.prs.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_kom_routes_to_summit_kom(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "kom"]
+            with patch("summit.kom.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_activities_routes_to_summit_activities(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "activities"]
+            with patch("summit.activities.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_check_routes_to_summit_updates(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "check"]
+            with patch("summit.updates.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_generate_routes_to_cli_generate(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "generate"]
+            with patch("summit.cli.generate.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_setup_routes_to_cli_setup(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "setup"]
+            with patch("summit.cli.setup.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_update_routes_to_cli_update(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "update"]
+            with patch("summit.cli.update.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_auto_update_routes_to_cli_auto_update(self):
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        mock_main = MagicMock()
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "auto-update"]
+            with patch("summit.cli.auto_update.main", mock_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        mock_main.assert_called_once()
+
+    def test_passthrough_args_forwarded(self):
+        """Extra args are forwarded to the target module via sys.argv."""
+        from unittest.mock import MagicMock, patch
+        import sys
+        from summit.cli import main as cli_main
+
+        captured_argv = []
+
+        def fake_main():
+            captured_argv.extend(sys.argv[1:])
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "prs", "--activity", "running", "--top", "5"]
+            with patch("summit.prs.main", side_effect=fake_main):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        assert captured_argv == ["--activity", "running", "--top", "5"]
+
+    def test_no_subcommand_exits_nonzero(self, capsys):
+        """Running `summit` with no subcommand prints help and exits with code 1."""
+        import sys
+        import pytest
+        from summit.cli import main as cli_main
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit"]
+            with pytest.raises(SystemExit) as exc_info:
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "COMMAND" in captured.out or "usage" in captured.out.lower()
+
+    def test_help_flag_exits_zero(self):
+        """summit --help exits 0."""
+        import sys
+        import pytest
+        from summit.cli import main as cli_main
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "--help"]
+            with pytest.raises(SystemExit) as exc_info:
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        assert exc_info.value.code == 0
+
+    def test_unknown_subcommand_prints_usage(self, capsys):
+        """An unknown subcommand causes argparse to exit with usage message."""
+        import sys
+        import pytest
+        from summit.cli import main as cli_main
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = ["summit", "nonexistent-command"]
+            with pytest.raises(SystemExit):
+                cli_main.main()
+        finally:
+            sys.argv = old_argv
+
+        # argparse prints usage to stderr for unrecognised subcommands
+        captured = capsys.readouterr()
+        assert "usage" in (captured.out + captured.err).lower()
+
+
+
 import io
 import sys
 from datetime import datetime, timedelta

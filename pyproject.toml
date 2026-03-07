@@ -15,15 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-summit-prs          = "summit.prs:main"
-summit-kom          = "summit.kom:main"
-summit-activities   = "summit.activities:main"
-summit-check        = "summit.updates:main"
-summit-setup        = "summit.cli.setup:main"
-summit-update       = "summit.cli.update:main"
-summit-generate     = "summit.cli.generate:main"
-summit-auto-update  = "summit.cli.auto_update:main"
-komoot              = "summit.komoot:main"
+summit = "summit.cli.main:main"
 
 [project.optional-dependencies]
 test = [

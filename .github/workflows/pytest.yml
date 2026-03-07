@@ -1,0 +1,17 @@
+name: pytest
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  pytest:
+    uses: BartSte/.github/.github/workflows/pytest.yml@main
+    with:
+      python-version: "3.11"
