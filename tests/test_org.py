@@ -40,11 +40,12 @@ class TestKomJsonToOrg:
         assert isinstance(result, str)
         assert "* Segment KOMs" in result
 
-    def test_missing_input_file_returns_empty(self, tmp_path, capsys):
-        result = kom_json_to_org(str(tmp_path / "nonexistent.json"))
-        captured = capsys.readouterr()
+    def test_missing_input_file_returns_empty(self, tmp_path, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING, logger="summit.org"):
+            result = kom_json_to_org(str(tmp_path / "nonexistent.json"))
         assert result == ""
-        assert "Warning" in captured.out
+        assert any("not found" in r.message for r in caplog.records)
 
     def test_segment_names_as_headings(self, tmp_path, sample_kom_data):
         kom_file = tmp_path / "kom.json"

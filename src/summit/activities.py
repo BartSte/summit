@@ -15,16 +15,19 @@ Metadata cache: ~/.cache/garmin/activity_meta/YYYY.json
 
 import argparse
 import json
+import logging
 import subprocess
 import sys
 from calendar import month_abbr, month_name
 from datetime import datetime, timedelta
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 try:
     from garminconnect import Garmin
 except ImportError:
-    print("Error: garminconnect not installed. Activate venv first.")
+    print("Error: garminconnect not installed. Activate venv first.", file=sys.stderr)
     sys.exit(1)
 
 from summit.credentials import get_credential
@@ -332,11 +335,11 @@ def main():
     start_date = f"{year}-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
 
-    print(f">>> Loading cache for {year}...", file=sys.stderr)
+    logger.info("Loading cache for %d...", year)
     by_id = load_cache(year)
-    print(f"    Cached: {len(by_id)} activities", file=sys.stderr)
+    logger.info("Cached: %d activities", len(by_id))
 
-    print(f">>> Fetching activity list from Garmin ({start_date} → {end_date})...", file=sys.stderr)
+    logger.info("Fetching activity list from Garmin (%s → %s)...", start_date, end_date)
     client = None
     try:
         user = get_credential("garmin", "username")
@@ -344,13 +347,13 @@ def main():
         client = Garmin(user, passwd)
         client.login()
         raw = fetch_activities(client, start_date, end_date)
-        print(f"    Fetched: {len(raw)} activities from API", file=sys.stderr)
+        logger.info("Fetched: %d activities from API", len(raw))
     except Exception as e:
         if by_id:
-            print(f"    Warning: Garmin API failed ({e}), using cache only", file=sys.stderr)
+            logger.warning("Garmin API failed (%s), using cache only", e)
             raw = []
         else:
-            print(f"    Error: Garmin API failed and no cache available: {e}", file=sys.stderr)
+            logger.error("Garmin API failed and no cache available: %s", e)
             sys.exit(1)
 
     # Upsert into cache
@@ -367,9 +370,9 @@ def main():
             updated_count += 1
         by_id[aid] = meta
 
-    print(f"    New: {new_count}  Updated: {updated_count} activities", file=sys.stderr)
+    logger.info("New: %d  Updated: %d activities", new_count, updated_count)
     save_cache(year, by_id)
-    print(f"    Cache saved: {cache_path(year)}", file=sys.stderr)
+    logger.info("Cache saved: %s", cache_path(year))
 
     # Group by ISO week ("YYYY-Www")
     by_week: dict = {}
@@ -390,7 +393,7 @@ def main():
         by_week.setdefault(week_key, []).append(meta)
 
     # Fetch weekly intensity minutes
-    print(f">>> Fetching weekly intensity minutes ({start_date} → {end_date})...", file=sys.stderr)
+    logger.info("Fetching weekly intensity minutes (%s → %s)...", start_date, end_date)
     intensity_by_week: dict = {}
     try:
         if client is None:
@@ -404,9 +407,9 @@ def main():
             iso_year, iso_week, _ = dt.isocalendar()
             if iso_year == year:
                 intensity_by_week[iso_week] = entry
-        print(f"    Got {len(intensity_by_week)} weeks of intensity data", file=sys.stderr)
+        logger.info("Got %d weeks of intensity data", len(intensity_by_week))
     except Exception as e:
-        print(f"    Warning: intensity minutes fetch failed ({e}), skipping", file=sys.stderr)
+        logger.warning("Intensity minutes fetch failed (%s), skipping", e)
 
     # Generate output
     if args.format == "org":
@@ -418,19 +421,19 @@ def main():
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(content)
-        print(f">>> Written: {out_path}", file=sys.stderr)
-        print(f"    Weeks: {len(by_week)}  Total activities: {len(by_id)}", file=sys.stderr)
+        logger.info("Written: %s", out_path)
+        logger.info("Weeks: %d  Total activities: %d", len(by_week), len(by_id))
         # Sync to Dropbox only when writing an org file
         if args.format == "org":
-            print(">>> Syncing to Dropbox...", file=sys.stderr)
+            logger.info("Syncing to Dropbox...")
             try:
                 subprocess.run(
                     ["rclone", "copyto", str(out_path), "dropbox:/org/activities.org"],
                     check=True, capture_output=True,
                 )
-                print("    ✓ Synced", file=sys.stderr)
+                logger.info("Synced to Dropbox")
             except Exception as e:
-                print(f"    Warning: rclone sync failed ({e})", file=sys.stderr)
+                logger.warning("rclone sync failed (%s)", e)
     else:
         print(content)
 

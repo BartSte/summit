@@ -218,15 +218,15 @@ class TestDownloadSegments:
         downloaded = download_segments(api, prefix="SEG-", cache_dir=str(tmp_path))
         assert downloaded == []
 
-    def test_handles_download_exception(self, tmp_path, capsys):
+    def test_handles_download_exception(self, tmp_path, caplog):
+        import logging
         tours = [{"id": 10, "name": "SEG-Fail"}]
         api = self._make_api(tours)
         api.download_tour_gpx.side_effect = Exception("download failed")
-        downloaded = download_segments(api, prefix="SEG-", cache_dir=str(tmp_path))
+        with caplog.at_level(logging.ERROR, logger="summit.komoot"):
+            downloaded = download_segments(api, prefix="SEG-", cache_dir=str(tmp_path))
         assert downloaded == []
-        captured = capsys.readouterr()
-        assert "SEG-Fail" in captured.out
-        assert "download failed" in captured.out
+        assert any("SEG-Fail" in r.message and "download failed" in r.message for r in caplog.records)
 
     def test_creates_cache_dir(self, tmp_path):
         new_dir = tmp_path / "newsegments"

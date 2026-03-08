@@ -4,17 +4,19 @@ Check if there are new Garmin activities or Komoot segments that need updating.
 Compares cache state against live data.
 """
 import json
+import logging
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 try:
     from garminconnect import Garmin
     from komPYoot.api import API, TourOwner, TourType
 except Exception as e:
-    print(f"Error: Missing dependencies ({e})")
-    print("Install with: pip install garminconnect komPYoot")
+    logger.error("Missing dependencies (%s). Install with: pip install garminconnect komPYoot", e)
     sys.exit(1)
 
 from summit.credentials import get_credential
@@ -125,52 +127,48 @@ def main():
         sys.exit(1 if updates_needed else 0)
 
     # Verbose output
-    print("=" * 70)
-    print("Checking for updates...")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("Checking for updates...")
+    logger.info("=" * 70)
 
-    # Check Garmin
-    print("\n[Garmin Activities]")
+    # Garmin
+    logger.info("\n[Garmin Activities]")
     if garmin_err:
-        print(f"✗ Error: {garmin_err}")
+        logger.error("✗ Garmin error: %s", garmin_err)
     elif garmin_info:
-        print(f"  Latest activity:  {garmin_info['latest_time']} (id: {garmin_info['latest_id']})")
-        print(f"  Last cached:      {garmin_info['last_cached_time']}")
+        logger.info("  Latest activity:  %s (id: %s)", garmin_info['latest_time'], garmin_info['latest_id'])
+        logger.info("  Last cached:      %s", garmin_info['last_cached_time'])
         if garmin_new:
-            print(f"  → New activities detected ✓")
+            logger.info("  → New activities detected ✓")
         else:
-            print(f"  → No new activities")
+            logger.info("  → No new activities")
 
-    # Check Komoot
-    print("\n[Komoot Segments]")
+    # Komoot
+    logger.info("\n[Komoot Segments]")
     if komoot_err:
-        print(f"✗ Error: {komoot_err}")
+        logger.error("✗ Komoot error: %s", komoot_err)
     elif komoot_info:
-        print(f"  Cached segments:  {komoot_info['cached_segments']}")
-        print(f"  Planned segments: {komoot_info['planned_segments']}")
+        logger.info("  Cached segments:  %d", komoot_info['cached_segments'])
+        logger.info("  Planned segments: %d", komoot_info['planned_segments'])
         if komoot_info['missing_in_cache']:
-            print(f"  Missing in cache: {', '.join(komoot_info['missing_in_cache'][:3])}")
+            logger.info("  Missing in cache: %s", ', '.join(komoot_info['missing_in_cache'][:3]))
             if len(komoot_info['missing_in_cache']) > 3:
-                print(f"                   ... and {len(komoot_info['missing_in_cache']) - 3} more")
+                logger.info("                   ... and %d more", len(komoot_info['missing_in_cache']) - 3)
         if komoot_info['extra_in_cache']:
-            print(f"  Extra in cache:   {', '.join(komoot_info['extra_in_cache'][:3])}")
+            logger.info("  Extra in cache:   %s", ', '.join(komoot_info['extra_in_cache'][:3]))
         if komoot_new:
-            print(f"  → New/modified segments detected ✓")
+            logger.info("  → New/modified segments detected ✓")
         else:
-            print(f"  → Segments up-to-date")
+            logger.info("  → Segments up-to-date")
 
-    print("\n" + "=" * 70)
+    logger.info("\n" + "=" * 70)
 
     if updates_needed:
-        print("⚠ Updates available!")
-        print("\nRun to update:")
-        print("  summit-update")
-        print("  # or for auto mode:")
-        print("  summit-auto-update")
+        logger.info("⚠ Updates available! Run: summit update  (or: summit auto-update)")
     else:
-        print("✓ All caches are up-to-date")
+        logger.info("✓ All caches are up-to-date")
 
-    print("=" * 70)
+    logger.info("=" * 70)
 
 
 if __name__ == "__main__":

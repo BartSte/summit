@@ -10,10 +10,13 @@ Usage examples:
 
 import argparse
 import datetime
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Tuple
+
+logger = logging.getLogger(__name__)
 
 import requests
 from komPYoot.api import API, TourOwner, TourType
@@ -103,9 +106,9 @@ def download_segments(api: API, prefix: str, cache_dir: str) -> List[tuple]:
             api.download_tour_gpx(tour_id, cache_dir)
             # komPYoot saves as {name}.gpx in the target directory
             downloaded.append((tour_id, name, str(filepath)))
-            print(f"✓ {name} (id {tour_id})")
+            logger.info("✓ %s (id %s)", name, tour_id)
         except Exception as e:
-            print(f"✗ {name} (id {tour_id}): {e}")
+            logger.error("✗ %s (id %s): %s", name, tour_id, e)
 
     return downloaded
 
@@ -135,15 +138,15 @@ def main():
         list_planned(api)
     elif args.cmd == "rename":
         rename_tour(api, args.id, args.name)
-        print(f"Renamed {args.id} -> {args.name}")
+        logger.info("Renamed %s -> %s", args.id, args.name)
     elif args.cmd == "bulk-prefix":
         renamed = bulk_prefix(api, args.old, args.new)
-        print(f"RENAMED {len(renamed)}")
+        logger.info("Renamed %d tours", len(renamed))
         for tid, old, new in renamed:
-            print(f"{tid}: {old} -> {new}")
+            logger.info("  %s: %s -> %s", tid, old, new)
     elif args.cmd == "download-segments":
         downloaded = download_segments(api, args.prefix, args.cache_dir)
-        print(f"\nDOWNLOADED {len(downloaded)} segments to {args.cache_dir}")
+        logger.info("Downloaded %d segments to %s", len(downloaded), args.cache_dir)
 
 
 if __name__ == "__main__":

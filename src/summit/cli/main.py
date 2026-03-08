@@ -5,6 +5,7 @@ Unified entry point for summit CLI.
 Usage: summit <subcommand> [args...]
 """
 import argparse
+import logging
 import sys
 
 
@@ -25,6 +26,11 @@ def main():
         prog="summit",
         description="Garmin KOM & personal records tracker",
     )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose (DEBUG) logging",
+    )
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     for name, (_, help_text) in SUBCOMMANDS.items():
@@ -32,6 +38,11 @@ def main():
 
     # Parse only the subcommand; leave remaining args for the target module.
     args, remaining = parser.parse_known_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s")
+    else:
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     if args.command is None:
         parser.print_help()

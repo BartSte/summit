@@ -2,9 +2,12 @@
 """Convert segment KOM JSON to org-mode format."""
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def seconds_to_hms(seconds):
@@ -18,7 +21,7 @@ def seconds_to_hms(seconds):
 def kom_json_to_org(kom_json_path) -> str:
     """Convert KOM JSON file to org-mode string. Returns empty string if file not found."""
     if not Path(kom_json_path).exists():
-        print(f"Warning: KOM JSON file not found: {kom_json_path}")
+        logger.warning("KOM JSON file not found: %s", kom_json_path)
         return ""
 
     with open(kom_json_path) as f:
@@ -83,7 +86,7 @@ def main():
 
     if args.format == "json":
         if not Path(args.kom_json).exists():
-            print(f"Warning: KOM JSON file not found: {args.kom_json}")
+            logger.error("KOM JSON file not found: %s", args.kom_json)
             sys.exit(1)
         with open(args.kom_json) as f:
             data = json.load(f)
@@ -95,7 +98,7 @@ def main():
 
     if args.output:
         Path(args.output).write_text(content)
-        print(f"✓ Written to {args.output}")
+        logger.info("Written to %s", args.output)
     else:
         print(content)
 
