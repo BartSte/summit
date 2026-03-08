@@ -167,7 +167,7 @@ def load_cached_track(cache_dir: Path, activity_id):
 
 def fetch_activities(client, start_date, end_date):
     start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date)
+    end_dt = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
     acts = []
     offset = 0
     limit = 100

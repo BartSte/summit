@@ -240,7 +240,7 @@ def format_duration(seconds):
 def fetch_activities(client, start_date, end_date):
     # Page through recent activities and filter by date range.
     start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date)
+    end_dt = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
     acts = []
     offset = 0
     limit = 100
