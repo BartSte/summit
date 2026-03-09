@@ -44,7 +44,7 @@ def parse_args():
     p.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Cache directory (default: /skills/kom/cache)")
     p.add_argument("--cache-spacing", type=float, default=5.0, help="Downsample spacing for cached tracks (meters)")
     p.add_argument("--top", type=int, default=10, help="Number of fastest results to include per distance")
-    p.add_argument("--time-mode", choices=["elapsed", "moving"], default="elapsed", help="Use elapsed or moving time")
+    p.add_argument("--time-mode", choices=["elapsed", "moving"], default="moving", help="Use elapsed or moving time")
     p.add_argument("--moving-threshold-m", type=float, default=1.0, help="Distance threshold below which time is ignored in moving mode")
     p.add_argument("--output", default=None, help="Write output to file")
     p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
