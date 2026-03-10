@@ -291,6 +291,49 @@ class TestComputeBestForDistance:
         if result_elapsed and result_moving:
             assert result_moving["duration_s"] <= result_elapsed["duration_s"]
 
+    def test_moving_mode_excludes_rest_gap_via_speed_threshold(self):
+        """Speed threshold should exclude GPS-drift rest gaps that distance threshold misses."""
+        from datetime import timedelta
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        # 10 riding points at ~30 km/h (≈8.33 m/s): 100 m per 12 s
+        riding_step_m = 100.0
+        lat_step = riding_step_m / 111_000
+        pts = [(51.5 + i * lat_step, 0.0, t0 + timedelta(seconds=i * 12), None) for i in range(10)]
+        # Rest gap: 3 m GPS drift over 2 hours (d > 1.0 m but speed ≈ 0.00042 m/s)
+        rest_start = pts[-1]
+        rest_end = (
+            rest_start[0] + 3 / 111_000,
+            0.0,
+            rest_start[2] + timedelta(hours=2),
+            None,
+        )
+        pts.append(rest_end)
+        # 10 more riding points after the rest
+        for i in range(1, 11):
+            pts.append((
+                rest_end[0] + i * lat_step,
+                0.0,
+                rest_end[2] + timedelta(seconds=i * 12),
+                None,
+            ))
+
+        dist_m = 1500.0
+        result_elapsed = compute_best_for_distance(pts, dist_m, time_mode="elapsed")
+        result_moving_with_threshold = compute_best_for_distance(
+            pts, dist_m, time_mode="moving", moving_speed_threshold_ms=1.0 / 3.6
+        )
+        result_moving_no_threshold = compute_best_for_distance(
+            pts, dist_m, time_mode="moving", moving_speed_threshold_ms=0.0
+        )
+
+        assert result_elapsed is not None
+        assert result_moving_with_threshold is not None
+        assert result_moving_no_threshold is not None
+        # With speed threshold: rest gap excluded → shorter than elapsed
+        assert result_moving_with_threshold["duration_s"] < result_elapsed["duration_s"]
+        # Without speed threshold (old behaviour): rest leaks in → equals elapsed
+        assert result_moving_no_threshold["duration_s"] == pytest.approx(result_elapsed["duration_s"], rel=1e-6)
+
     def test_result_has_expected_keys(self):
         pts = self._make_straight_points(n=20, spacing_m=100.0, seconds_per_point=20.0)
         result = compute_best_for_distance(pts, distance_m=500.0)

@@ -46,6 +46,12 @@ def parse_args():
     p.add_argument("--top", type=int, default=10, help="Number of fastest results to include per distance")
     p.add_argument("--time-mode", choices=["elapsed", "moving"], default="moving", help="Use elapsed or moving time")
     p.add_argument("--moving-threshold-m", type=float, default=1.0, help="Distance threshold below which time is ignored in moving mode")
+    p.add_argument(
+        "--moving-speed-threshold-kmh",
+        type=float,
+        default=1.0,
+        help="Min speed (km/h) for a segment to count as moving. Default: 1.0 km/h.",
+    )
     p.add_argument("--output", default=None, help="Write output to file")
     p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
     return p.parse_args()
@@ -195,7 +201,13 @@ def fetch_activities(client, start_date, end_date):
     return acts
 
 
-def compute_best_for_distance(points, distance_m, time_mode="elapsed", moving_threshold_m=1.0):
+def compute_best_for_distance(
+    points,
+    distance_m,
+    time_mode="elapsed",
+    moving_threshold_m=1.0,
+    moving_speed_threshold_ms=0.0,
+):
     # Filter points with time
     pts = [p for p in points if len(p) > 2 and p[2] is not None]
     if len(pts) < 2:
@@ -211,8 +223,10 @@ def compute_best_for_distance(points, distance_m, time_mode="elapsed", moving_th
         dt = (b[2] - a[2]).total_seconds()
         if dt < 0:
             dt = 0.0
-        if time_mode == "moving" and d < moving_threshold_m:
-            dt = 0.0
+        if time_mode == "moving":
+            speed_ms = d / dt if dt > 0 else 0.0
+            if d < moving_threshold_m or speed_ms < moving_speed_threshold_ms:
+                dt = 0.0
         cumdist.append(cumdist[-1] + d)
         cumtime.append(cumtime[-1] + dt)
 
@@ -309,6 +323,7 @@ def main():
                 dist_m,
                 time_mode=args.time_mode,
                 moving_threshold_m=args.moving_threshold_m,
+                moving_speed_threshold_ms=args.moving_speed_threshold_kmh / 3.6,
             )
             if not best:
                 continue
