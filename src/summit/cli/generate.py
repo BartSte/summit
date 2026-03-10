@@ -29,6 +29,7 @@ def main():
             sys.executable, "-m", "summit.prs",
             "--activity", "cycling",
             "--distances", "1,5,10,20,30,40,50,60,70,80,90,100",
+            "--format", "org",
             "--start", start_date,
             "--end", end_date,
             "--output", str(output_file),
@@ -46,6 +47,7 @@ def main():
             "--activity", "running",
             "--distances", "1,5,10",
             "--title", "Running PRs",
+            "--format", "org",
             "--start", start_date,
             "--end", end_date,
             "--output", str(running_tmp),
@@ -62,15 +64,20 @@ def main():
     kom_json = Path("/tmp/kom_results_full.json")
     if kom_json.exists():
         logger.info(">>> Step 3: Appending Segment KOMs...")
+        kom_tmp = Path("/tmp/kom_results.org")
         subprocess.run(
             [
                 sys.executable, "-m", "summit.org",
                 str(kom_json),
                 "--format", "org",
-                "--output", str(output_file),
+                "--output", str(kom_tmp),
             ],
             check=True,
         )
+        with open(output_file, "a") as f:
+            f.write("\n")
+            f.write(kom_tmp.read_text())
+        kom_tmp.unlink(missing_ok=True)
         logger.info("    ✓ Segment KOMs appended")
     else:
         logger.info(">>> Step 3: No segment KOMs found (skipping)")
