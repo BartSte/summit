@@ -23,3 +23,8 @@ repos:
     hooks:
       - id: uv-lock
 
+  # Ensure the code is type checked
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.408
+    hooks:
+      - id: pyright

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+# File type: Python
+
+You must follow the "Google Python Style Guide" at all times when writing Python code. This means docstrings must also be "Google style" docstrings.
+
 ## Commands
 
 ```bash
