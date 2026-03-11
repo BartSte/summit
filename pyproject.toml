@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "summit"
-version = "0.1.0"
+dynamic = ["version"]
 requires-python = ">=3.11"
 dependencies = [
     "garminconnect==0.2.38",
@@ -29,3 +29,39 @@ addopts = "-v --tb=short"
 
 [tool.setuptools.packages.find]
 where = ["src"] 
+
+[tool.setuptools_scm]
+tag_regex = '^v(?P<version>\d+\.\d+\.\d+(?:[ab]\d+)?)$'
+
+[tool.pyright]
+# Environment options. We aim to keep the defaults hence little settings are applied.
+include = ["src", "tests"]
+
+# Type Evaluation Settings.
+strictDictionaryInference = true
+strictListInference = true
+strictSetInference = true
+
+# Type Check Rule Overrides.
+reportMissingTypeStubs = false
+reportUninitializedInstanceVariable = "information"
+reportUnusedCallResult = "information"
+reportImplicitStringConcatenation = false
+
+## It is obligatory to provide types for functions/methods. Missing them is
+# considered an error. Reporting a missing return type is not supported by pyright so it is handled by flake8-annotations.
+reportMissingParameterType = true
+
+## These are set to "warning" as optional types are common in the dataclient, which 
+## a very common dependency.
+reportOptionalCall = "warning"
+reportOptionalContextManager = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalOperand = "warning"
+reportOptionalSubscript = "warning"
+
+## The following checks are already covered by Ruff.
+reportDuplicateImport = false
+reportUnsupportedDunderAll = false
+reportUnusedImport = false
+reportUnusedVariable = false
