@@ -1,25 +1,40 @@
-#!/usr/bin/env python3
 """Convert segment KOM JSON to org-mode format."""
 import argparse
 import json
 import logging
 import sys
 from pathlib import Path
-from datetime import datetime
+from typing import Any, Union
 
 logger = logging.getLogger(__name__)
 
 
-def seconds_to_hms(seconds):
-    """Convert seconds to HH:MM:SS format"""
+def seconds_to_hms(seconds: Union[int, float]) -> str:
+    """Convert a duration in seconds to HH:MM:SS or MM:SS format.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Formatted string like ``'01:23:45'`` or ``'23:45'``.
+    """
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}" if hours > 0 else f"{minutes:02d}:{secs:02d}"
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
-def kom_json_to_org(kom_json_path) -> str:
-    """Convert KOM JSON file to org-mode string. Returns empty string if file not found."""
+def kom_json_to_org(kom_json_path: Any) -> str:
+    """Convert a KOM JSON file to an org-mode formatted string.
+
+    Args:
+        kom_json_path: Path to the KOM JSON results file.
+
+    Returns:
+        Org-mode formatted string, or empty string if file not found.
+    """
     if not Path(kom_json_path).exists():
         logger.warning("KOM JSON file not found: %s", kom_json_path)
         return ""
@@ -31,7 +46,14 @@ def kom_json_to_org(kom_json_path) -> str:
 
 
 def _render_org(kom_data: dict) -> str:
-    """Render KOM data dict as org-mode string."""
+    """Render a KOM data dict as an org-mode formatted string.
+
+    Args:
+        kom_data: Dict mapping segment names to result dicts.
+
+    Returns:
+        Org-mode formatted string with segment sections and tables.
+    """
     org_lines = []
     org_lines.append("")
     org_lines.append("* Segment KOMs")
@@ -59,15 +81,18 @@ def _render_org(kom_data: dict) -> str:
             time_hms = seconds_to_hms(activity['duration_s'])
             date = activity['startTimeLocal'].split()[0]
             avg_speed = activity.get('avg_speed_kmh', 0)
-            org_lines.append(f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {date} |")
+            org_lines.append(
+                f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {date} |")
 
         org_lines.append("")
 
     return "\n".join(org_lines)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Convert KOM JSON to org-mode format")
+def main() -> None:
+    """Convert a KOM JSON file to org-mode format and write to output."""
+    parser = argparse.ArgumentParser(
+        description="Convert KOM JSON to org-mode format")
     parser.add_argument(
         "kom_json",
         nargs="?",
@@ -101,7 +126,3 @@ def main():
         logger.info("Written to %s", args.output)
     else:
         print(content)
-
-
-if __name__ == "__main__":
-    main()

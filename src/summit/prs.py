@@ -1,14 +1,14 @@
-#!/usr/bin/env python3
-"""
-Compute personal cycling PRs for fixed distances (e.g., 5/10/40 km)
-from Garmin activities, reusing the /kom track cache.
+"""Compute personal cycling PRs for fixed distances (e.g., 5/10/40 km).
+
+Reuses the KOM track cache to avoid redundant GPX downloads.
 """
 import argparse
 import json
 import math
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
-import xml.etree.ElementTree as ET
+from typing import Any, Optional
 
 try:
     from garminconnect import Garmin
@@ -32,20 +32,37 @@ DEFAULT_CACHE_DIR = Path("/home/barts/.cache/garmin")
 TRACKS_DIRNAME = "tracks"
 
 
-def parse_args():
-    p = argparse.ArgumentParser(description="Compute cycling PRs for fixed distances using cached tracks")
-    p.add_argument("--distances", default="5,10,40", help="Comma-separated distances in km (e.g., 5,10,40)")
-    p.add_argument("--activity", choices=["cycling", "running", "all"], default="cycling")
-    p.add_argument("--title", default=None, help="Section title for org output")
-    p.add_argument("--range", choices=["this_year", "last_2_years", "last_year", "last_6_months"], default="this_year")
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for the prs command.
+
+    Returns:
+        Parsed argument namespace.
+    """
+    p = argparse.ArgumentParser(
+        description="Compute cycling PRs for fixed distances using cached tracks"
+    )
+    p.add_argument("--distances", default="5,10,40",
+                   help="Comma-separated distances in km (e.g., 5,10,40)")
+    p.add_argument(
+        "--activity", choices=["cycling", "running", "all"], default="cycling")
+    p.add_argument("--title", default=None,
+                   help="Section title for org output")
+    p.add_argument("--range", choices=["this_year", "last_2_years",
+                   "last_year", "last_6_months"], default="this_year")
     p.add_argument("--start", help="YYYY-MM-DD (overrides --range)")
     p.add_argument("--end", help="YYYY-MM-DD (overrides --range)")
-    p.add_argument("--limit-activities", type=int, default=None, help="Limit number of activities (debug)")
-    p.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Cache directory (default: /skills/kom/cache)")
-    p.add_argument("--cache-spacing", type=float, default=5.0, help="Downsample spacing for cached tracks (meters)")
-    p.add_argument("--top", type=int, default=10, help="Number of fastest results to include per distance")
-    p.add_argument("--time-mode", choices=["elapsed", "moving"], default="moving", help="Use elapsed or moving time")
-    p.add_argument("--moving-threshold-m", type=float, default=1.0, help="Distance threshold below which time is ignored in moving mode")
+    p.add_argument("--limit-activities", type=int, default=None,
+                   help="Limit number of activities (debug)")
+    p.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR),
+                   help="Cache directory (default: /skills/kom/cache)")
+    p.add_argument("--cache-spacing", type=float, default=5.0,
+                   help="Downsample spacing for cached tracks (meters)")
+    p.add_argument("--top", type=int, default=10,
+                   help="Number of fastest results to include per distance")
+    p.add_argument("--time-mode", choices=["elapsed", "moving"],
+                   default="moving", help="Use elapsed or moving time")
+    p.add_argument("--moving-threshold-m", type=float, default=1.0,
+                   help="Distance threshold below which time is ignored in moving mode")
     p.add_argument(
         "--moving-speed-threshold-kmh",
         type=float,
@@ -53,17 +70,27 @@ def parse_args():
         help="Min speed (km/h) for a segment to count as moving. Default: 1.0 km/h.",
     )
     p.add_argument("--output", default=None, help="Write output to file")
-    p.add_argument("--format", choices=["json", "org"], default="json", help="Output format (default: json)")
+    p.add_argument("--format", choices=["json", "org"],
+                   default="json", help="Output format (default: json)")
     return p.parse_args()
 
 
-def resolve_range(args):
+def resolve_range(args: Any) -> tuple[datetime, datetime]:
+    """Resolve the date range from parsed CLI arguments.
+
+    Args:
+        args: Parsed argument namespace with range, start, and end fields.
+
+    Returns:
+        Tuple of (start, end) datetime objects.
+    """
     now = datetime.now()
     if args.start and args.end:
         start = datetime.fromisoformat(args.start)
         end = datetime.fromisoformat(args.end)
     elif args.range == "this_year":
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        start = now.replace(month=1, day=1, hour=0,
+                            minute=0, second=0, microsecond=0)
         end = now
     elif args.range == "last_year":
         end = now
@@ -77,17 +104,39 @@ def resolve_range(args):
     return start, end
 
 
-def want_activity(type_key, activity):
+def want_activity(type_key: Any, activity: str) -> bool:
+    """Return True if the activity type matches the requested filter.
+
+    Args:
+        type_key: Garmin typeKey string for the activity.
+        activity: Filter mode: ``'cycling'``, ``'running'``, or ``'all'``.
+
+    Returns:
+        True if the activity should be included in processing.
+    """
     if activity == "all":
         return True
     if activity == "cycling":
         return type_key in CYCLING_TYPES or (type_key and "bike" in type_key)
     if activity == "running":
-        return type_key in {"running", "trail_running", "treadmill_running", "track_running"} or (type_key and "run" in type_key)
+        running_types = {
+            "running", "trail_running", "treadmill_running", "track_running"
+        }
+        return type_key in running_types or (
+            type_key and "run" in type_key
+        )
     return False
 
 
-def parse_time(t):
+def parse_time(t: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO 8601 timestamp string to a datetime, or return None.
+
+    Args:
+        t: Timestamp string, possibly ending in ``'Z'``, or None.
+
+    Returns:
+        Parsed datetime, or None if input is None or unparseable.
+    """
     if t is None:
         return None
     t = t.strip()
@@ -99,17 +148,40 @@ def parse_time(t):
         return None
 
 
-def haversine_m(lat1, lon1, lat2, lon2):
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return the great-circle distance in metres between two coordinates.
+
+    Args:
+        lat1: Latitude of the first point in decimal degrees.
+        lon1: Longitude of the first point in decimal degrees.
+        lat2: Latitude of the second point in decimal degrees.
+        lon2: Longitude of the second point in decimal degrees.
+
+    Returns:
+        Distance in metres.
+    """
     r = 6371000.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dl / 2) ** 2
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * \
+        math.cos(phi2) * math.sin(dl / 2) ** 2
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def downsample_activity(points, min_spacing_m=5.0):
+def downsample_activity(
+    points: list[Any], min_spacing_m: float = 5.0
+) -> list[Any]:
+    """Reduce a list of GPS points by enforcing a minimum spacing.
+
+    Args:
+        points: List of (lat, lon, time, ele) tuples.
+        min_spacing_m: Minimum distance in metres between kept points.
+
+    Returns:
+        Downsampled list of points, always including the last original point.
+    """
     if not points:
         return points
     kept = [points[0]]
@@ -123,7 +195,15 @@ def downsample_activity(points, min_spacing_m=5.0):
     return kept
 
 
-def parse_gpx_text(gpx_text):
+def parse_gpx_text(gpx_text: str) -> list[Any]:
+    """Parse GPX XML text into a list of track points.
+
+    Args:
+        gpx_text: GPX file content as a string.
+
+    Returns:
+        List of (lat, lon, time, ele) tuples, or empty list on parse error.
+    """
     try:
         root = ET.fromstring(gpx_text)
     except Exception:
@@ -143,15 +223,38 @@ def parse_gpx_text(gpx_text):
     return points
 
 
-def ensure_cache_dirs(cache_dir: Path):
+def ensure_cache_dirs(cache_dir: Path) -> None:
+    """Create required cache subdirectories if they do not exist.
+
+    Args:
+        cache_dir: Root cache directory path.
+    """
     (cache_dir / TRACKS_DIRNAME).mkdir(parents=True, exist_ok=True)
 
 
-def cache_track_path(cache_dir: Path, activity_id):
+def cache_track_path(cache_dir: Path, activity_id: Any) -> Path:
+    """Return the file path for a cached activity track.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+
+    Returns:
+        Path to the JSON cache file for the activity.
+    """
     return cache_dir / TRACKS_DIRNAME / f"{activity_id}.json"
 
 
-def save_cached_track(cache_dir: Path, activity_id, points):
+def save_cached_track(
+    cache_dir: Path, activity_id: Any, points: list[Any]
+) -> None:
+    """Serialise and save a downsampled track to the JSON cache.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+        points: List of (lat, lon, time, ele) tuples.
+    """
     rows = []
     for p in points:
         t = p[2] if len(p) > 2 else None
@@ -160,7 +263,18 @@ def save_cached_track(cache_dir: Path, activity_id, points):
     cache_track_path(cache_dir, activity_id).write_text(json.dumps(rows))
 
 
-def load_cached_track(cache_dir: Path, activity_id):
+def load_cached_track(
+    cache_dir: Path, activity_id: Any
+) -> Optional[list[Any]]:
+    """Load a previously cached track, or return None if absent.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+
+    Returns:
+        List of (lat, lon, time, ele) tuples, or None if not cached.
+    """
     path = cache_track_path(cache_dir, activity_id)
     if not path.exists():
         return None
@@ -171,9 +285,20 @@ def load_cached_track(cache_dir: Path, activity_id):
     return points
 
 
-def fetch_activities(client, start_date, end_date):
+def fetch_activities(client: Any, start_date: str, end_date: str) -> list[Any]:
+    """Page through Garmin activities and return those within a date range.
+
+    Args:
+        client: Authenticated Garmin client.
+        start_date: Start date in YYYY-MM-DD format.
+        end_date: End date in YYYY-MM-DD format.
+
+    Returns:
+        List of raw activity dicts within the date range.
+    """
     start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
+    end_dt = datetime.fromisoformat(end_date).replace(
+        hour=23, minute=59, second=59)
     acts = []
     offset = 0
     limit = 100
@@ -202,13 +327,31 @@ def fetch_activities(client, start_date, end_date):
 
 
 def compute_best_for_distance(
-    points,
-    distance_m,
-    time_mode="elapsed",
-    moving_threshold_m=1.0,
-    moving_speed_threshold_ms=0.0,
-):
-    # Filter points with time
+    points: list[Any],
+    distance_m: float,
+    time_mode: str = "elapsed",
+    moving_threshold_m: float = 1.0,
+    moving_speed_threshold_ms: float = 0.0,
+) -> Optional[dict[str, Any]]:
+    """Find the minimum time to cover a fixed distance within a track.
+
+    Uses a sliding-window algorithm over timestamped GPS points.
+
+    Args:
+        points: List of (lat, lon, time, ele) tuples with timestamps.
+        distance_m: Target distance in metres.
+        time_mode: ``'elapsed'`` uses raw clock time; ``'moving'`` excludes
+            paused segments below the speed threshold.
+        moving_threshold_m: Minimum inter-point distance (m) to count as
+            movement in moving mode.
+        moving_speed_threshold_ms: Minimum speed (m/s) to count as
+            movement in moving mode.
+
+    Returns:
+        Dict with ``duration_s`` (float) and ``start_time`` (datetime)
+        keys, or None if no window of the required distance exists.
+    """
+    # Filter points with time.
     pts = [p for p in points if len(p) > 2 and p[2] is not None]
     if len(pts) < 2:
         return None
@@ -266,12 +409,15 @@ def compute_best_for_distance(
     }
 
 
-def main():
+def main() -> None:
+    """Compute personal cycling/running records and output results."""
     args = parse_args()
     if Garmin is None:
-        raise SystemExit("garminconnect not installed. Activate venv and pip install garminconnect")
+        raise SystemExit(
+            "garminconnect not installed. Activate venv and pip install garminconnect")
 
-    distances_km = [float(x.strip()) for x in args.distances.split(",") if x.strip()]
+    distances_km = [float(x.strip())
+                    for x in args.distances.split(",") if x.strip()]
     distances_m = [d * 1000.0 for d in distances_km]
 
     cache_dir = Path(args.cache_dir)
@@ -304,7 +450,8 @@ def main():
         points_ds = load_cached_track(cache_dir, activity_id)
         if points_ds is None:
             try:
-                gpx_data = client.download_activity(activity_id, dl_fmt=Garmin.ActivityDownloadFormat.GPX)
+                gpx_data = client.download_activity(
+                    activity_id, dl_fmt=Garmin.ActivityDownloadFormat.GPX)
             except Exception:
                 continue
             if isinstance(gpx_data, bytes):
@@ -336,19 +483,34 @@ def main():
                 "activityId": activity_id,
                 "activityName": act.get("activityName"),
                 "startTimeLocal": act.get("startTimeLocal"),
-                "segmentStartTime": best.get("start_time").isoformat() if best.get("start_time") else None,
+                "segmentStartTime": (
+                    t.isoformat()
+                    if (t := best.get("start_time")) is not None else None
+                ),
             }
             results[str(dist_km)].append(entry)
 
     # Sort and keep top N
     for k in list(results.keys()):
-        results[k] = sorted(results[k], key=lambda x: x["duration_s"])[: args.top]
+        results[k] = sorted(results[k], key=lambda x: x["duration_s"])[
+            : args.top]
 
     def render_org(results_dict: dict) -> str:
-        title = args.title or ("Cycling PRs" if args.activity == "cycling" else "Running PRs")
+        """Render PR results as org-mode formatted text.
+
+        Args:
+            results_dict: Dict mapping distance strings to lists of PR
+                entries.
+
+        Returns:
+            Org-mode formatted string with headers and tables.
+        """
+        title = args.title or (
+            "Cycling PRs" if args.activity == "cycling" else "Running PRs")
         lines = [f"* {title}"]
         lines.append(f"- Time mode: {args.time_mode}")
-        lines.append(f"- Distances: {', '.join(str(d) for d in distances_km)} km")
+        lines.append(
+            f"- Distances: {', '.join(str(d) for d in distances_km)} km")
         for dist in distances_km:
             key = str(dist)
             lines.append(f"** {dist:.1f} km")
@@ -364,17 +526,35 @@ def main():
                 m = int((d % 3600) // 60)
                 s = int(d % 60)
                 time_str = f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:d}:{s:02d}"
-                date = (r.get("startTimeLocal") or "").split()[0]  # Extract date only
+                date = (r.get("startTimeLocal") or "").split()[
+                    0]  # Extract date only
                 table_rows.append([
                     str(i),
                     time_str,
                     f"{(r.get('avg_kmh') or 0):.1f} km/h",
                     date,
                 ])
-            cols = list(zip(*([headers] + table_rows))) if table_rows else list(zip(*([headers])))
+            cols = list(zip(*([headers] + table_rows))
+                        ) if table_rows else list(zip(*([headers])))
             widths = [max(len(str(cell)) for cell in col) for col in cols]
-            def fmt_row(cells):
-                return "| " + " | ".join(str(c).ljust(widths[i]) for i, c in enumerate(cells)) + " |"
+
+            def fmt_row(cells: Any) -> str:
+                """Format a list of cells as a padded org-mode table row.
+
+                Args:
+                    cells: Iterable of cell values to format.
+
+                Returns:
+                    Org-mode table row string with cell separators.
+                """
+                return (
+                    "| "
+                    + " | ".join(
+                        str(c).ljust(widths[i])
+                        for i, c in enumerate(cells)
+                    )
+                    + " |"
+                )
             lines.append(fmt_row(headers))
             lines.append("|" + "+".join("-" * (w + 2) for w in widths) + "|")
             for r in table_rows:
@@ -390,7 +570,3 @@ def main():
         Path(args.output).write_text(content)
     else:
         print(content)
-
-
-if __name__ == "__main__":
-    main()

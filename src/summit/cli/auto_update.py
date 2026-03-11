@@ -1,17 +1,18 @@
-#!/usr/bin/env python3
-"""
-Auto-update for systemd timer (every 15 minutes).
-Non-interactive: checks for updates and, if found, runs a full
-cache refresh and regenerates personal records.
-NO LLM usage — all local processing.
+"""Auto-update for systemd timer (every 15 minutes).
+
+Non-interactive: checks for updates and, if found, runs a full cache
+refresh and regenerates personal records. No LLM usage — all local
+processing.
 """
 import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import IO, Any
 
 
-def main():
+def main() -> None:
+    """Open the auto-update log file and run the update pipeline."""
     log_file = Path.home() / ".cache" / "garmin" / "auto_update.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -19,12 +20,17 @@ def main():
         _run(log)
 
 
-def _run(log):
-    def p(*args):
+def _run(log: IO[str]) -> None:
+    """Execute the full update pipeline, logging all output.
+
+    Args:
+        log: Open file handle for log output.
+    """
+    def p(*args: Any) -> None:
         line = " ".join(str(a) for a in args)
         print(line, file=log, flush=True)
 
-    def run(cmd, **kwargs):
+    def run(cmd: Any, **kwargs: Any) -> subprocess.CompletedProcess[Any]:
         return subprocess.run(cmd, stdout=log, stderr=log, **kwargs)
 
     p()
@@ -44,7 +50,8 @@ def _run(log):
 
     p(">>> Updates detected - processing...")
 
-    start_date = (datetime.now() - timedelta(days=6 * 365)).strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=6 * 365)
+                  ).strftime("%Y-%m-%d")
     end_date = datetime.now().strftime("%Y-%m-%d")
 
     # Step 1: Update Garmin activity cache (last 6 months)
@@ -106,7 +113,3 @@ def _run(log):
     p()
     p(f"✓ Auto-update complete: {datetime.now()}")
     p("=========================================")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,33 +1,21 @@
 """Tests for summit.prs — personal records logic."""
-import json
-import math
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 
-from summit.prs import (
-    CYCLING_TYPES,
-    cache_track_path,
-    compute_best_for_distance,
-    downsample_activity,
-    ensure_cache_dirs,
-    haversine_m,
-    load_cached_track,
-    parse_args,
-    parse_gpx_text,
-    parse_time,
-    resolve_range,
-    save_cached_track,
-    want_activity,
-)
-
+from summit.prs import (CYCLING_TYPES, cache_track_path,
+                        compute_best_for_distance, downsample_activity,
+                        ensure_cache_dirs, haversine_m, load_cached_track,
+                        parse_args, parse_gpx_text, parse_time, resolve_range,
+                        save_cached_track, want_activity)
 
 # ---------------------------------------------------------------------------
 # haversine_m
 # ---------------------------------------------------------------------------
+
 
 class TestHaversineM:
     def test_same_point_is_zero(self):
@@ -98,7 +86,7 @@ class TestDownsampleActivity:
     ("2024-06-01 09:00:00", False),
     ("not-a-date", True),
 ])
-def test_parse_time(t, expected_none):
+def test_parse_time(t: Any, expected_none: bool):
     result = parse_time(t)
     if expected_none:
         assert result is None
@@ -119,7 +107,7 @@ def test_parse_time_z_suffix():
 # ---------------------------------------------------------------------------
 
 class TestParseGpxText:
-    def test_valid_gpx(self, sample_gpx_track):
+    def test_valid_gpx(self, sample_gpx_track: Any):
         points = parse_gpx_text(sample_gpx_track)
         assert len(points) == 5
         lat, lon, t, ele = points[0]
@@ -163,7 +151,7 @@ class TestParseGpxText:
 # ---------------------------------------------------------------------------
 
 class TestResolveRange:
-    def _args(self, range_val="this_year", start=None, end=None):
+    def _args(self, range_val: str = "this_year", start: Any = None, end: Any = None):
         return SimpleNamespace(start=start, end=end, range=range_val)
 
     def test_this_year_starts_jan1(self):
@@ -218,7 +206,7 @@ class TestResolveRange:
     ("running", "all", True),
     ("yoga", "all", True),
 ])
-def test_want_activity(type_key, activity, expected):
+def test_want_activity(type_key: Any, activity: str, expected: bool):
     assert want_activity(type_key, activity) == expected
 
 
@@ -233,20 +221,22 @@ def test_want_activity_none_type_key():
 # ---------------------------------------------------------------------------
 
 class TestComputeBestForDistance:
-    def _make_straight_points(self, n=10, spacing_m=100.0, seconds_per_point=30.0):
+    def _make_straight_points(self, n: int = 10, spacing_m: float = 100.0, seconds_per_point: float = 30.0):
         """Create a straight-line track with evenly spaced points."""
         # 0.001 degree lat ≈ 111 m, so compute the lat step for spacing_m
         lat_step = spacing_m / 111_000
         t0 = datetime(2024, 6, 1, 9, 0, 0)
         from datetime import timedelta
         return [
-            (51.5 + i * lat_step, 0.0, t0 + timedelta(seconds=i * seconds_per_point), 10.0)
+            (51.5 + i * lat_step, 0.0, t0 +
+             timedelta(seconds=i * seconds_per_point), 10.0)
             for i in range(n)
         ]
 
     def test_finds_best_for_distance(self):
         # 10 points, 100 m apart, 30 s each → total ~900 m in 270 s
-        pts = self._make_straight_points(n=10, spacing_m=100.0, seconds_per_point=30.0)
+        pts = self._make_straight_points(
+            n=10, spacing_m=100.0, seconds_per_point=30.0)
         result = compute_best_for_distance(pts, distance_m=500.0)
         assert result is not None
         assert result["duration_s"] > 0
@@ -268,7 +258,8 @@ class TestComputeBestForDistance:
 
     def test_distance_exceeds_track_returns_none(self):
         # Track is only ~900 m but we ask for 10 km
-        pts = self._make_straight_points(n=10, spacing_m=100.0, seconds_per_point=30.0)
+        pts = self._make_straight_points(
+            n=10, spacing_m=100.0, seconds_per_point=30.0)
         result = compute_best_for_distance(pts, distance_m=10_000.0)
         assert result is None
 
@@ -285,8 +276,10 @@ class TestComputeBestForDistance:
             (51.5018, 0.0, t0 + timedelta(seconds=180), None),  # stationary (0 m)
             (51.5027, 0.0, t0 + timedelta(seconds=210), None),  # ~100 m
         ]
-        result_elapsed = compute_best_for_distance(pts, 300.0, time_mode="elapsed")
-        result_moving = compute_best_for_distance(pts, 300.0, time_mode="moving", moving_threshold_m=1.0)
+        result_elapsed = compute_best_for_distance(
+            pts, 300.0, time_mode="elapsed")
+        result_moving = compute_best_for_distance(
+            pts, 300.0, time_mode="moving", moving_threshold_m=1.0)
         # Moving time should be shorter (stationary time excluded)
         if result_elapsed and result_moving:
             assert result_moving["duration_s"] <= result_elapsed["duration_s"]
@@ -298,7 +291,8 @@ class TestComputeBestForDistance:
         # 10 riding points at ~30 km/h (≈8.33 m/s): 100 m per 12 s
         riding_step_m = 100.0
         lat_step = riding_step_m / 111_000
-        pts = [(51.5 + i * lat_step, 0.0, t0 + timedelta(seconds=i * 12), None) for i in range(10)]
+        pts = [(51.5 + i * lat_step, 0.0, t0 + timedelta(seconds=i * 12), None)
+               for i in range(10)]
         # Rest gap: 3 m GPS drift over 2 hours (d > 1.0 m but speed ≈ 0.00042 m/s)
         rest_start = pts[-1]
         rest_end = (
@@ -318,7 +312,8 @@ class TestComputeBestForDistance:
             ))
 
         dist_m = 1500.0
-        result_elapsed = compute_best_for_distance(pts, dist_m, time_mode="elapsed")
+        result_elapsed = compute_best_for_distance(
+            pts, dist_m, time_mode="elapsed")
         result_moving_with_threshold = compute_best_for_distance(
             pts, dist_m, time_mode="moving", moving_speed_threshold_ms=1.0 / 3.6
         )
@@ -332,10 +327,12 @@ class TestComputeBestForDistance:
         # With speed threshold: rest gap excluded → shorter than elapsed
         assert result_moving_with_threshold["duration_s"] < result_elapsed["duration_s"]
         # Without speed threshold (old behaviour): rest leaks in → equals elapsed
-        assert result_moving_no_threshold["duration_s"] == pytest.approx(result_elapsed["duration_s"], rel=1e-6)
+        assert result_moving_no_threshold["duration_s"] == pytest.approx(
+            result_elapsed["duration_s"], rel=1e-6)
 
     def test_result_has_expected_keys(self):
-        pts = self._make_straight_points(n=20, spacing_m=100.0, seconds_per_point=20.0)
+        pts = self._make_straight_points(
+            n=20, spacing_m=100.0, seconds_per_point=20.0)
         result = compute_best_for_distance(pts, distance_m=500.0)
         assert result is not None
         assert "duration_s" in result
@@ -347,16 +344,16 @@ class TestComputeBestForDistance:
 # ---------------------------------------------------------------------------
 
 class TestCacheHelpers:
-    def test_cache_track_path(self, tmp_cache_dir):
+    def test_cache_track_path(self, tmp_cache_dir: Any):
         path = cache_track_path(tmp_cache_dir, 99999)
         assert path == tmp_cache_dir / "tracks" / "99999.json"
 
-    def test_ensure_cache_dirs_creates_tracks(self, tmp_path):
+    def test_ensure_cache_dirs_creates_tracks(self, tmp_path: Path):
         cache = tmp_path / "mygarmin"
         ensure_cache_dirs(cache)
         assert (cache / "tracks").is_dir()
 
-    def test_save_and_load_roundtrip(self, tmp_cache_dir):
+    def test_save_and_load_roundtrip(self, tmp_cache_dir: Any):
         t0 = datetime(2024, 6, 1, 9, 0, 0)
         from datetime import timedelta
         points = [
@@ -370,11 +367,11 @@ class TestCacheHelpers:
         assert loaded[0][0] == pytest.approx(51.5)
         assert loaded[0][2] is not None  # timestamp preserved
 
-    def test_load_missing_returns_none(self, tmp_cache_dir):
+    def test_load_missing_returns_none(self, tmp_cache_dir: Any):
         result = load_cached_track(tmp_cache_dir, 999999)
         assert result is None
 
-    def test_save_points_without_timestamps(self, tmp_cache_dir):
+    def test_save_points_without_timestamps(self, tmp_cache_dir: Any):
         points = [(51.5, 0.0, None, 10.0), (51.501, 0.001, None, 12.0)]
         save_cached_track(tmp_cache_dir, 77777, points)
         loaded = load_cached_track(tmp_cache_dir, 77777)
@@ -382,7 +379,7 @@ class TestCacheHelpers:
         for _, _, t, _ in loaded:
             assert t is None
 
-    def test_save_points_without_elevation(self, tmp_cache_dir):
+    def test_save_points_without_elevation(self, tmp_cache_dir: Any):
         t0 = datetime(2024, 6, 1, 9, 0, 0)
         points = [(51.5, 0.0, t0, None)]
         save_cached_track(tmp_cache_dir, 88888, points)
@@ -396,28 +393,28 @@ class TestCacheHelpers:
 # ---------------------------------------------------------------------------
 
 class TestParseArgs:
-    def _parse(self, argv, monkeypatch):
+    def _parse(self, argv: list[str], monkeypatch: pytest.MonkeyPatch):
         import sys
         monkeypatch.setattr(sys, "argv", ["summit-prs"] + argv)
         return parse_args()
 
-    def test_default_format_is_json(self, monkeypatch):
+    def test_default_format_is_json(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse([], monkeypatch)
         assert args.format == "json"
 
-    def test_format_org(self, monkeypatch):
+    def test_format_org(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse(["--format", "org"], monkeypatch)
         assert args.format == "org"
 
-    def test_format_json_explicit(self, monkeypatch):
+    def test_format_json_explicit(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse(["--format", "json"], monkeypatch)
         assert args.format == "json"
 
-    def test_output_default_is_none(self, monkeypatch):
+    def test_output_default_is_none(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse([], monkeypatch)
         assert args.output is None
 
-    def test_output_flag(self, monkeypatch, tmp_path):
+    def test_output_flag(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         out = str(tmp_path / "out.json")
         args = self._parse(["--output", out], monkeypatch)
         assert args.output == out

@@ -1,33 +1,20 @@
 """Tests for summit.activities — YTD summary generation."""
-import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 
-from summit.activities import (
-    TYPE_LABELS,
-    current_iso_week,
-    extract_meta,
-    fmt_distance,
-    fmt_duration,
-    generate_org,
-    intensity_line,
-    iso_week_date_range,
-    load_cache,
-    org_table,
-    parse_args,
-    save_cache,
-    summary_table,
-    type_label,
-    week_month_label,
-)
-
+from summit.activities import (TYPE_LABELS, current_iso_week, extract_meta,
+                               fmt_distance, fmt_duration, generate_org,
+                               intensity_line, iso_week_date_range, load_cache,
+                               org_table, parse_args, save_cache,
+                               summary_table, type_label, week_month_label)
 
 # ---------------------------------------------------------------------------
 # fmt_duration
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("seconds,expected", [
     (0, "0:00:00"),
@@ -37,7 +24,7 @@ from summit.activities import (
     (90, "0:01:30"),
     (59, "0:00:59"),
 ])
-def test_fmt_duration(seconds, expected):
+def test_fmt_duration(seconds: float, expected: str) -> None:
     assert fmt_duration(seconds) == expected
 
 
@@ -57,7 +44,7 @@ def test_fmt_duration_rounds():
     (10.5, "10.5"),
     (100.0, "100.0"),
 ])
-def test_fmt_distance(km, expected):
+def test_fmt_distance(km: float, expected: str) -> None:
     assert fmt_distance(km) == expected
 
 
@@ -70,8 +57,10 @@ def test_type_label_known():
     assert type_label("running") == "Running"
     assert type_label("hiking") == "Hiking"
 
+
 def test_type_label_unknown_snake_case():
     assert type_label("some_unknown_type") == "Some Unknown Type"
+
 
 def test_type_label_all_known_types():
     for key, label in TYPE_LABELS.items():
@@ -189,6 +178,7 @@ def test_current_iso_week_for_past_year():
     w = current_iso_week(2020)
     assert 52 <= w <= 53
 
+
 def test_current_iso_week_for_current_year():
     year = datetime.now().year
     w = current_iso_week(year)
@@ -276,7 +266,7 @@ class TestOrgTable:
     (20, 10, 40),
     (0, 0, 0),
 ])
-def test_intensity_line(mod, vig, expected_effective):
+def test_intensity_line(mod: int, vig: int, expected_effective: int) -> None:
     data = {"moderateValue": mod, "vigorousValue": vig}
     line = intensity_line(data)
     assert str(mod) in line
@@ -368,13 +358,13 @@ class TestGenerateOrg:
 # ---------------------------------------------------------------------------
 
 class TestCacheFunctions:
-    def test_load_missing_year_returns_empty(self, tmp_path, monkeypatch):
+    def test_load_missing_year_returns_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import summit.activities as act_module
         monkeypatch.setattr(act_module, "CACHE_DIR", tmp_path)
         result = load_cache(2099)
         assert result == {}
 
-    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
+    def test_save_and_load_roundtrip(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import summit.activities as act_module
         monkeypatch.setattr(act_module, "CACHE_DIR", tmp_path)
 
@@ -388,7 +378,7 @@ class TestCacheFunctions:
         assert "111" in loaded
         assert loaded["111"]["activityName"] == "Test"
 
-    def test_corrupt_cache_returns_empty(self, tmp_path, monkeypatch):
+    def test_corrupt_cache_returns_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import summit.activities as act_module
         monkeypatch.setattr(act_module, "CACHE_DIR", tmp_path)
         cache_file = tmp_path / "2024.json"
@@ -402,24 +392,24 @@ class TestCacheFunctions:
 # ---------------------------------------------------------------------------
 
 class TestActivitiesParseArgs:
-    def _parse(self, argv, monkeypatch):
+    def _parse(self, argv: list[str], monkeypatch: pytest.MonkeyPatch) -> Any:
         import sys
         monkeypatch.setattr(sys, "argv", ["summit-activities"] + argv)
         return parse_args()
 
-    def test_default_format_is_json(self, monkeypatch):
+    def test_default_format_is_json(self, monkeypatch: pytest.MonkeyPatch) -> None:
         args = self._parse([], monkeypatch)
         assert args.format == "json"
 
-    def test_format_org(self, monkeypatch):
+    def test_format_org(self, monkeypatch: pytest.MonkeyPatch) -> None:
         args = self._parse(["--format", "org"], monkeypatch)
         assert args.format == "org"
 
-    def test_output_default_is_none(self, monkeypatch):
+    def test_output_default_is_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         args = self._parse([], monkeypatch)
         assert args.output is None
 
-    def test_output_flag(self, monkeypatch, tmp_path):
+    def test_output_flag(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         out = str(tmp_path / "activities.org")
         args = self._parse(["--output", out], monkeypatch)
         assert args.output == out

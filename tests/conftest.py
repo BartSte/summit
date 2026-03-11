@@ -1,12 +1,10 @@
 """Shared fixtures for summit test suite."""
-import json
 import textwrap
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Sample GPX data
@@ -82,13 +80,13 @@ SAMPLE_GPX_NO_TIMESTAMPS = textwrap.dedent("""\
 # ---------------------------------------------------------------------------
 
 def make_activity(
-    activity_id=12345678,
-    name="Morning Ride",
-    type_key="cycling",
-    start_time="2024-06-01 09:00:00",
-    duration=3600.0,
-    distance=40000.0,
-):
+    activity_id: int = 12345678,
+    name: str = "Morning Ride",
+    type_key: str = "cycling",
+    start_time: str = "2024-06-01 09:00:00",
+    duration: float = 3600.0,
+    distance: float = 40000.0,
+) -> dict[str, Any]:
     return {
         "activityId": activity_id,
         "activityName": name,
@@ -101,9 +99,12 @@ def make_activity(
 
 
 SAMPLE_ACTIVITIES = [
-    make_activity(12345678, "Morning Ride", "cycling", "2024-06-15 09:00:00", 3600.0, 40000.0),
-    make_activity(12345679, "Evening Run", "running", "2024-06-16 18:00:00", 1800.0, 10000.0),
-    make_activity(12345680, "Trail Ride", "mountain_biking", "2024-06-17 10:00:00", 5400.0, 30000.0),
+    make_activity(12345678, "Morning Ride", "cycling",
+                  "2024-06-15 09:00:00", 3600.0, 40000.0),
+    make_activity(12345679, "Evening Run", "running",
+                  "2024-06-16 18:00:00", 1800.0, 10000.0),
+    make_activity(12345680, "Trail Ride", "mountain_biking",
+                  "2024-06-17 10:00:00", 5400.0, 30000.0),
 ]
 
 
@@ -159,7 +160,7 @@ SAMPLE_KOM_DATA = {
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def tmp_cache_dir(tmp_path):
+def tmp_cache_dir(tmp_path: Path) -> Path:
     """A temporary cache directory with tracks/ subdirectory."""
     tracks = tmp_path / "tracks"
     tracks.mkdir()
@@ -167,7 +168,7 @@ def tmp_cache_dir(tmp_path):
 
 
 @pytest.fixture
-def tmp_segments_dir(tmp_path):
+def tmp_segments_dir(tmp_path: Path) -> Path:
     """A temporary directory containing segment GPX files."""
     seg_dir = tmp_path / "segments"
     seg_dir.mkdir()
@@ -198,7 +199,7 @@ def sample_kom_data():
 
 
 @pytest.fixture
-def mock_garmin_client(sample_activities):
+def mock_garmin_client(sample_activities: list[Any]) -> MagicMock:
     """Mock garminconnect.Garmin client."""
     client = MagicMock()
     client.get_activities.return_value = sample_activities
@@ -209,9 +210,9 @@ def mock_garmin_client(sample_activities):
 
 
 @pytest.fixture
-def mock_rbw(monkeypatch):
+def mock_rbw(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Patch subprocess.check_output so rbw_get returns test credentials."""
-    def fake_check_output(cmd, **kwargs):
+    def fake_check_output(cmd: Any, **kwargs: Any) -> str:
         if "--field" in cmd and "username" in cmd:
             return "test@example.com\n"
         return "testpassword\n"

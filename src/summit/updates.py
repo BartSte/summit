@@ -1,34 +1,50 @@
-#!/usr/bin/env python3
 """
 Check if there are new Garmin activities or Komoot segments that need updating.
 Compares cache state against live data.
 """
-import json
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
+
+from summit.credentials import get_credential
 
 logger = logging.getLogger(__name__)
+
+
+class _KomootInfo(TypedDict):
+    cached_segments: int
+    planned_segments: int
+    missing_in_cache: list[str]
+    extra_in_cache: list[str]
+
 
 try:
     from garminconnect import Garmin
     from komPYoot.api import API, TourOwner, TourType
 except Exception as e:
-    logger.error("Missing dependencies (%s). Install with: pip install garminconnect komPYoot", e)
+    logger.error(
+        "Missing dependencies (%s). Install with: pip install garminconnect komPYoot", e)
     sys.exit(1)
 
-from summit.credentials import get_credential
 
+def check_garmin_activities() -> tuple[dict | None, bool | None, str | None]:
+    """Check whether there are new Garmin activities since the last cache.
 
-def check_garmin_activities():
-    """Check if there are new Garmin activities since last cache."""
+    Returns:
+        Tuple of (info, is_new, error). info contains latest_id,
+        latest_time, last_cached_time, and id_in_cache keys.
+        is_new is True if an uncached activity is found.
+        error contains an error message string on failure, else None.
+    """
     cache_dir = Path("/home/barts/.cache/garmin/tracks")
 
     # Get most recent cached activity
+    cached_files: list[Path] = []
     if cache_dir.exists():
-        cached_files = sorted(cache_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        cached_files = sorted(cache_dir.glob("*.json"),
+                              key=lambda p: p.stat().st_mtime, reverse=True)
         if cached_files:
             last_cached = cached_files[0].stat().st_mtime
             last_cached_dt = datetime.fromtimestamp(last_cached)
@@ -45,17 +61,18 @@ def check_garmin_activities():
         client.login()
 
         recent = client.get_activities(start=0, limit=1)
-        if not recent:
-            return None, None, False
+        if not recent or not isinstance(recent, list):
+            return None, None, None
 
         activity = recent[0]
-        activity_time_str = activity.get("startTimeLocal") or activity.get("startTimeGMT")
-        activity_dt = datetime.fromisoformat(activity_time_str.replace("Z", "+00:00"))
+        activity_time_str = activity.get(
+            "startTimeLocal") or activity.get("startTimeGMT")
+        activity_dt = datetime.fromisoformat(
+            activity_time_str.replace("Z", "+00:00"))
         activity_id = activity.get("activityId")
 
         # Check if new: ID-based check (timestamp comparison fails when activity
-        # is uploaded after the cache run but has an earlier start time)
-        latest_id_cached = str(cached_files[0].stem) if cached_files else None
+        # is uploaded after the cache run but has an earlier start time).
         id_in_cache = (cache_dir / f"{activity_id}.json").exists()
         is_new = (last_cached_dt is None) or not id_in_cache
 
@@ -69,8 +86,14 @@ def check_garmin_activities():
         return None, None, str(e)
 
 
-def check_komoot_segments():
-    """Check if there are new/modified Komoot segments since last cache."""
+def check_komoot_segments() -> tuple[_KomootInfo | None, bool | None, str | None]:
+    """Check whether Komoot segment cache is in sync with planned tours.
+
+    Returns:
+        Tuple of (info, is_new, error). info contains cached and planned
+        segment counts. is_new is True if cache differs from planned tours.
+        error contains an error message string on failure, else None.
+    """
     cache_dir = Path("/home/barts/.cache/garmin/segments")
     cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,8 +109,10 @@ def check_komoot_segments():
         if not ok:
             return None, None, "Komoot login failed"
 
-        tours = api.get_user_tours_list(tour_type=TourType.PLANNED, tour_owner=TourOwner.SELF)
-        seg_tours = [t for t in tours if (t.get("name") or "").startswith("SEG-")]
+        tours = api.get_user_tours_list(
+            tour_type=TourType.PLANNED, tour_owner=TourOwner.SELF)
+        seg_tours = [t for t in tours if (
+            t.get("name") or "").startswith("SEG-")]
 
         planned_names = set(t.get("name") for t in seg_tours)
 
@@ -107,10 +132,12 @@ def check_komoot_segments():
         return None, None, str(e)
 
 
-def main():
+def main() -> None:
+    """Check for new Garmin activities and Komoot segments."""
     import argparse
     parser = argparse.ArgumentParser(description="Check for updates")
-    parser.add_argument("--quiet", action="store_true", help="Quiet mode: exit code 1 if updates needed, 0 otherwise")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Quiet mode: exit code 1 if updates needed, 0 otherwise")
     args = parser.parse_args()
 
     # Check Garmin
@@ -136,7 +163,8 @@ def main():
     if garmin_err:
         logger.error("✗ Garmin error: %s", garmin_err)
     elif garmin_info:
-        logger.info("  Latest activity:  %s (id: %s)", garmin_info['latest_time'], garmin_info['latest_id'])
+        logger.info("  Latest activity:  %s (id: %s)",
+                    garmin_info['latest_time'], garmin_info['latest_id'])
         logger.info("  Last cached:      %s", garmin_info['last_cached_time'])
         if garmin_new:
             logger.info("  → New activities detected ✓")
@@ -151,11 +179,14 @@ def main():
         logger.info("  Cached segments:  %d", komoot_info['cached_segments'])
         logger.info("  Planned segments: %d", komoot_info['planned_segments'])
         if komoot_info['missing_in_cache']:
-            logger.info("  Missing in cache: %s", ', '.join(komoot_info['missing_in_cache'][:3]))
+            logger.info("  Missing in cache: %s", ', '.join(
+                komoot_info['missing_in_cache'][:3]))
             if len(komoot_info['missing_in_cache']) > 3:
-                logger.info("                   ... and %d more", len(komoot_info['missing_in_cache']) - 3)
+                logger.info("                   ... and %d more",
+                            len(komoot_info['missing_in_cache']) - 3)
         if komoot_info['extra_in_cache']:
-            logger.info("  Extra in cache:   %s", ', '.join(komoot_info['extra_in_cache'][:3]))
+            logger.info("  Extra in cache:   %s", ', '.join(
+                komoot_info['extra_in_cache'][:3]))
         if komoot_new:
             logger.info("  → New/modified segments detected ✓")
         else:
@@ -164,12 +195,9 @@ def main():
     logger.info("\n" + "=" * 70)
 
     if updates_needed:
-        logger.info("⚠ Updates available! Run: summit update  (or: summit auto-update)")
+        logger.info(
+            "⚠ Updates available! Run: summit update  (or: summit auto-update)")
     else:
         logger.info("✓ All caches are up-to-date")
 
     logger.info("=" * 70)
-
-
-if __name__ == "__main__":
-    main()

@@ -1,31 +1,20 @@
 """Tests for summit.kom — KOM detection logic."""
-import math
-import textwrap
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 
-from summit.kom import (
-    calculate_distance_m,
-    calculate_elevation_gain_loss,
-    downsample_points,
-    format_duration,
-    haversine_m,
-    match_segment,
-    nearest_segment_index,
-    parse_args,
-    parse_time,
-    read_gpx_points,
-    resolve_range,
-    want_activity,
-)
-
+from summit.kom import (calculate_distance_m, calculate_elevation_gain_loss,
+                        downsample_points, format_duration, haversine_m,
+                        match_segment, nearest_segment_index, parse_args,
+                        parse_time, read_gpx_points, resolve_range,
+                        want_activity)
 
 # ---------------------------------------------------------------------------
 # haversine_m (separate implementation from prs.py — test independently)
 # ---------------------------------------------------------------------------
+
 
 class TestHaversineM:
     def test_zero_distance(self):
@@ -136,7 +125,7 @@ class TestCalculateElevationGainLoss:
 # ---------------------------------------------------------------------------
 
 class TestReadGpxPoints:
-    def test_valid_track(self, sample_gpx_track, tmp_path):
+    def test_valid_track(self, sample_gpx_track: Any, tmp_path: Path):
         gpx_file = tmp_path / "test.gpx"
         gpx_file.write_text(sample_gpx_track)
         points, name, root = read_gpx_points(gpx_file)
@@ -144,7 +133,7 @@ class TestReadGpxPoints:
         assert name is None  # our track GPX has name in trk, not root
         assert root is not None
 
-    def test_route_points_fallback(self, tmp_path):
+    def test_route_points_fallback(self, tmp_path: Path):
         from tests.conftest import SAMPLE_GPX_ROUTE
         gpx_file = tmp_path / "route.gpx"
         gpx_file.write_text(SAMPLE_GPX_ROUTE)
@@ -152,19 +141,19 @@ class TestReadGpxPoints:
         assert len(points) == 3
         assert name == "SEG-Test Route"
 
-    def test_malformed_returns_empty(self, tmp_path):
+    def test_malformed_returns_empty(self, tmp_path: Path):
         gpx_file = tmp_path / "bad.gpx"
         gpx_file.write_text("not valid xml <<<")
         points, name, root = read_gpx_points(gpx_file)
         assert points == []
         assert name is None
 
-    def test_missing_file_returns_empty(self, tmp_path):
+    def test_missing_file_returns_empty(self, tmp_path: Path):
         gpx_file = tmp_path / "nonexistent.gpx"
         points, name, root = read_gpx_points(gpx_file)
         assert points == []
 
-    def test_elevation_and_time_parsed(self, sample_gpx_track, tmp_path):
+    def test_elevation_and_time_parsed(self, sample_gpx_track: Any, tmp_path: Path):
         gpx_file = tmp_path / "track.gpx"
         gpx_file.write_text(sample_gpx_track)
         points, _, _ = read_gpx_points(gpx_file)
@@ -200,7 +189,7 @@ class TestNearestSegmentIndex:
 # ---------------------------------------------------------------------------
 
 class TestMatchSegment:
-    def _make_activity_points(self, lats, lon=0.0, t0=None, dt_s=30):
+    def _make_activity_points(self, lats: Any, lon: float = 0.0, t0: Any = None, dt_s: int = 30):
         """Helper to make activity points."""
         if t0 is None:
             t0 = datetime(2024, 6, 1, 9, 0, 0)
@@ -209,7 +198,7 @@ class TestMatchSegment:
             for i, lat in enumerate(lats)
         ]
 
-    def _make_segment_points(self, lats, lon=0.0):
+    def _make_segment_points(self, lats: Any, lon: float = 0.0):
         return [(lat, lon, None, None) for lat in lats]
 
     def test_match_found(self):
@@ -252,7 +241,7 @@ class TestMatchSegment:
             (51.5010, 0.0, t0 + timedelta(seconds=30), None),  # seg end (30s)
             (51.5050, 0.0, t0 + timedelta(seconds=60), None),  # off route
             (51.5000, 0.0, t0 + timedelta(seconds=90), None),  # seg start again
-            (51.5010, 0.0, t0 + timedelta(seconds=110), None), # seg end (20s)
+            (51.5010, 0.0, t0 + timedelta(seconds=110), None),  # seg end (20s)
         ]
         seg_pts = [
             (51.5000, 0.0, None, None),
@@ -265,7 +254,8 @@ class TestMatchSegment:
         assert duration <= 30.0 + 1.0  # allow small interpolation error
 
     def test_no_timestamps_returns_none(self):
-        act_pts = [(51.5000, 0.0, None, None), (51.5010, 0.0, None, None), (51.5020, 0.0, None, None)]
+        act_pts = [(51.5000, 0.0, None, None), (51.5010, 0.0,
+                                                None, None), (51.5020, 0.0, None, None)]
         seg_pts = [(51.5000, 0.0, None, None), (51.5010, 0.0, None, None)]
         result = match_segment(act_pts, seg_pts, tolerance_m=25.0)
         assert result is None
@@ -285,7 +275,7 @@ class TestMatchSegment:
     (7322, "2:02:02"),
     (3599, "59:59"),
 ])
-def test_format_duration(seconds, expected):
+def test_format_duration(seconds: int, expected: str):
     assert format_duration(seconds) == expected
 
 
@@ -297,8 +287,10 @@ def test_want_activity_cycling():
     assert want_activity("road_biking", "cycling") is True
     assert want_activity("running", "cycling") is False
 
+
 def test_want_activity_all():
     assert want_activity("yoga", "all") is True
+
 
 def test_resolve_range_this_year():
     from types import SimpleNamespace
@@ -312,23 +304,23 @@ def test_resolve_range_this_year():
 # ---------------------------------------------------------------------------
 
 class TestParseArgs:
-    def _parse(self, argv, monkeypatch):
+    def _parse(self, argv: list[str], monkeypatch: pytest.MonkeyPatch):
         import sys
         monkeypatch.setattr(sys, "argv", ["summit-kom"] + argv)
         return parse_args()
 
-    def test_default_format_is_json(self, monkeypatch):
+    def test_default_format_is_json(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse([], monkeypatch)
         assert args.format == "json"
 
-    def test_format_org(self, monkeypatch):
+    def test_format_org(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse(["--format", "org"], monkeypatch)
         assert args.format == "org"
 
-    def test_format_json_explicit(self, monkeypatch):
+    def test_format_json_explicit(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse(["--format", "json"], monkeypatch)
         assert args.format == "json"
 
-    def test_output_default_is_none(self, monkeypatch):
+    def test_output_default_is_none(self, monkeypatch: pytest.MonkeyPatch):
         args = self._parse([], monkeypatch)
         assert args.output is None

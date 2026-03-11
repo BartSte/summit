@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
-"""
-Generate Personal Records (Cycling + Running + Segment KOMs).
+"""Generate Personal Records (Cycling + Running + Segment KOMs).
+
 Output: ~/dropbox/org/personal_records.org
 
 Phase: called by setup, update, and auto_update after cache is populated.
@@ -14,8 +13,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def main():
-    start_date = (datetime.now() - timedelta(days=6 * 365)).strftime("%Y-%m-%d")
+def main() -> None:
+    """Assemble the personal_records.org file from PRs and KOM data."""
+    start_date = (datetime.now() - timedelta(days=6 * 365)
+                  ).strftime("%Y-%m-%d")
     end_date = datetime.now().strftime("%Y-%m-%d")
     output_file = Path.home() / "dropbox" / "org" / "personal_records.org"
 
@@ -23,7 +24,10 @@ def main():
     logger.info("    Date range: %s to %s", start_date, end_date)
 
     # Step 1: Cycling PRs (write fresh file)
-    logger.info(">>> Step 1: Cycling PRs (1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 km)...")
+    logger.info(
+        ">>> Step 1: Cycling PRs "
+        "(1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 km)..."
+    )
     subprocess.run(
         [
             sys.executable, "-m", "summit.prs",
@@ -83,8 +87,5 @@ def main():
         logger.info(">>> Step 3: No segment KOMs found (skipping)")
 
     line_count = len(output_file.read_text().splitlines())
-    logger.info("✓ Personal records complete — %s (%d lines)", output_file, line_count)
-
-
-if __name__ == "__main__":
-    main()
+    logger.info("✓ Personal records complete — %s (%d lines)",
+                output_file, line_count)

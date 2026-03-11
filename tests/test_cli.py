@@ -3,17 +3,26 @@
 # cli/main.py — unified CLI dispatcher
 # ---------------------------------------------------------------------------
 
+import io
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
+
+
 class TestUnifiedCLI:
     """Tests for summit.cli.main — the unified `summit` entry point."""
 
-    def _dispatch(self, argv, mock_targets):
+    def _dispatch(self, argv: list[str], mock_targets: dict[str, Any]) -> None:
         """
         Call main() with sys.argv set to argv.
         mock_targets is a dict of module_path -> MagicMock to patch as `main`.
         Returns (mock_called, remaining_argv).
         """
         import sys
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
+
         from summit.cli import main as cli_main
 
         patches = {}
@@ -30,7 +39,7 @@ class TestUnifiedCLI:
             sys.argv = old_argv
 
     @staticmethod
-    def _apply_patches(patches):
+    def _apply_patches(patches: dict[str, Any]) -> Any:
         """Context manager that applies all patches together."""
         from contextlib import ExitStack
         stack = ExitStack()
@@ -40,8 +49,9 @@ class TestUnifiedCLI:
 
     def test_prs_routes_to_summit_prs(self):
         """summit prs → summit.prs.main()"""
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -56,8 +66,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_kom_routes_to_summit_kom(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -72,8 +83,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_activities_routes_to_summit_activities(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -88,8 +100,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_check_routes_to_summit_updates(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -104,8 +117,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_generate_routes_to_cli_generate(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -120,8 +134,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_setup_routes_to_cli_setup(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -136,8 +151,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_update_routes_to_cli_update(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -152,8 +168,9 @@ class TestUnifiedCLI:
         mock_main.assert_called_once()
 
     def test_auto_update_routes_to_cli_auto_update(self):
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import MagicMock, patch
+
         from summit.cli import main as cli_main
 
         mock_main = MagicMock()
@@ -169,8 +186,9 @@ class TestUnifiedCLI:
 
     def test_passthrough_args_forwarded(self):
         """Extra args are forwarded to the target module via sys.argv."""
-        from unittest.mock import MagicMock, patch
         import sys
+        from unittest.mock import patch
+
         from summit.cli import main as cli_main
 
         captured_argv = []
@@ -188,10 +206,12 @@ class TestUnifiedCLI:
 
         assert captured_argv == ["--activity", "running", "--top", "5"]
 
-    def test_no_subcommand_exits_nonzero(self, capsys):
+    def test_no_subcommand_exits_nonzero(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Running `summit` with no subcommand prints help and exits with code 1."""
         import sys
+
         import pytest
+
         from summit.cli import main as cli_main
 
         old_argv = sys.argv[:]
@@ -209,7 +229,9 @@ class TestUnifiedCLI:
     def test_help_flag_exits_zero(self):
         """summit --help exits 0."""
         import sys
+
         import pytest
+
         from summit.cli import main as cli_main
 
         old_argv = sys.argv[:]
@@ -222,10 +244,12 @@ class TestUnifiedCLI:
 
         assert exc_info.value.code == 0
 
-    def test_unknown_subcommand_prints_usage(self, capsys):
+    def test_unknown_subcommand_prints_usage(self, capsys: pytest.CaptureFixture[str]) -> None:
         """An unknown subcommand causes argparse to exit with usage message."""
         import sys
+
         import pytest
+
         from summit.cli import main as cli_main
 
         old_argv = sys.argv[:]
@@ -241,16 +265,6 @@ class TestUnifiedCLI:
         assert "usage" in (captured.out + captured.err).lower()
 
 
-
-import io
-import sys
-from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, call, mock_open, patch
-
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # cli/generate.py
 # ---------------------------------------------------------------------------
@@ -258,7 +272,7 @@ import pytest
 class TestGenerateMain:
     """Tests for summit.cli.generate.main()."""
 
-    def _run_generate(self, monkeypatch, tmp_path, kom_json_exists=False):
+    def _run_generate(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kom_json_exists: bool = False) -> list[Any]:
         """Run generate.main() with subprocess calls mocked."""
         from summit.cli import generate
 
@@ -271,7 +285,7 @@ class TestGenerateMain:
 
         calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             calls.append(cmd)
             # Simulate prs writing the output file
             if "--output" in cmd:
@@ -288,14 +302,15 @@ class TestGenerateMain:
 
         # Patch Path to route output_file to tmp_path
         import summit.cli.generate as gen_mod
-        monkeypatch.setattr(gen_mod, "Path", lambda *args: tmp_path / args[0] if args else tmp_path)
+        monkeypatch.setattr(
+            gen_mod, "Path", lambda *args: tmp_path / args[0] if args else tmp_path)
 
         return calls
 
-    def test_cycling_prs_subprocess_called(self, monkeypatch):
+    def test_cycling_prs_subprocess_called(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             calls.append(cmd)
             if "--output" in cmd:
                 idx = cmd.index("--output")
@@ -305,10 +320,11 @@ class TestGenerateMain:
             return MagicMock(returncode=0)
 
         with patch("summit.cli.generate.subprocess.run", side_effect=fake_run), \
-             patch("summit.cli.generate.Path") as mock_path_cls:
+                patch("summit.cli.generate.Path") as mock_path_cls:
 
             # Make output_file a real temp file
-            import tempfile, os
+            import os
+            import tempfile
             with tempfile.NamedTemporaryFile(suffix=".org", delete=False) as f:
                 tmp_org = f.name
             mock_path_cls.home.return_value = Path(tmp_org).parent
@@ -318,8 +334,8 @@ class TestGenerateMain:
             try:
                 from summit.cli.generate import main
                 with patch("pathlib.Path.read_text", return_value="test"), \
-                     patch("pathlib.Path.write_text"), \
-                     patch("builtins.open", mock_open()):
+                        patch("pathlib.Path.write_text"), \
+                        patch("builtins.open", mock_open()):
                     # Just verify subprocess is called for prs
                     pass
             finally:
@@ -331,23 +347,25 @@ class TestGenerateMain:
             # Mock the output_file path operations
             tmp = Path("/tmp")
             with patch("summit.cli.generate.Path.home", return_value=tmp), \
-                 patch("pathlib.Path.read_text", return_value="content\n"), \
-                 patch("pathlib.Path.write_text", return_value=None), \
-                 patch("builtins.open", mock_open(read_data="")):
-                from summit.cli import generate
+                    patch("pathlib.Path.read_text", return_value="content\n"), \
+                    patch("pathlib.Path.write_text", return_value=None), \
+                    patch("builtins.open", mock_open(read_data="")):
                 import importlib
+
+                from summit.cli import generate
+
                 # Reload to reset state
                 importlib.reload(generate)
                 # Just verify the module structure is importable
                 assert hasattr(generate, "main")
 
-    def test_generate_runs_cycling_and_running_prs(self, monkeypatch, tmp_path, capsys):
+    def test_generate_runs_cycling_and_running_prs(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Verify generate.main calls subprocess for cycling PRs, running PRs, and optionally KOM."""
         import summit.cli.generate as gen_mod
 
         subprocess_calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             subprocess_calls.append(list(cmd))
             if "--output" in cmd:
                 idx = cmd.index("--output")
@@ -360,12 +378,12 @@ class TestGenerateMain:
         running_tmp = tmp_path / "running_prs.org"
 
         with patch.object(gen_mod, "subprocess") as mock_subprocess, \
-             patch.object(gen_mod, "Path") as mock_path:
+                patch.object(gen_mod, "Path") as mock_path:
 
             mock_subprocess.run.side_effect = fake_run
 
             # Set up Path mock to return our tmp paths
-            def path_factory(*args):
+            def path_factory(*args: Any) -> Any:
                 if not args:
                     return tmp_path
                 s = str(args[0])
@@ -386,17 +404,17 @@ class TestGenerateMain:
             output_org.write_text("initial\n")
             with patch("builtins.open", mock_open(read_data="* Running PRs\n")):
                 with patch("pathlib.Path.read_text", return_value="* Running PRs\n"), \
-                     patch("pathlib.Path.write_text"):
+                        patch("pathlib.Path.write_text"):
                     # Check the module has the right structure
                     assert callable(gen_mod.main)
 
-    def test_generate_skips_kom_when_no_json(self, monkeypatch, tmp_path, capsys):
+    def test_generate_skips_kom_when_no_json(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """When kom_results_full.json doesn't exist, step 3 is skipped."""
         import summit.cli.generate as gen_mod
 
         subprocess_calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             subprocess_calls.append(cmd)
             if "--output" in cmd:
                 idx = cmd.index("--output")
@@ -407,8 +425,8 @@ class TestGenerateMain:
         org_file.write_text("")
 
         with patch("summit.cli.generate.subprocess.run", fake_run), \
-             patch("summit.cli.generate.Path", side_effect=lambda *a: Path(*a)), \
-             patch("pathlib.Path.home", return_value=tmp_path):
+                patch("summit.cli.generate.Path", side_effect=lambda *a: Path(*a)), \
+                patch("pathlib.Path.home", return_value=tmp_path):
             # Verify no summit.org call when kom JSON absent
             # (Integration: just ensure the function is importable and structured correctly)
             assert callable(gen_mod.main)
@@ -421,13 +439,13 @@ class TestGenerateMain:
 class TestAutoUpdate:
     """Tests for summit.cli.auto_update._run()."""
 
-    def test_no_updates_exits_early(self, tmp_path):
+    def test_no_updates_exits_early(self, tmp_path: Path) -> None:
         """When check returns exit code 0 (no updates), _run returns immediately."""
         from summit.cli.auto_update import _run
 
         subprocess_calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             result = MagicMock()
             if "summit.updates" in " ".join(cmd):
                 result.returncode = 0  # no updates
@@ -441,16 +459,17 @@ class TestAutoUpdate:
             _run(log)
 
         # No update commands should have been run
-        update_cmds = [c for c in subprocess_calls if "summit.prs" in " ".join(c)]
+        update_cmds = [
+            c for c in subprocess_calls if "summit.prs" in " ".join(c)]
         assert len(update_cmds) == 0
 
-    def test_updates_found_runs_all_steps(self, tmp_path):
+    def test_updates_found_runs_all_steps(self, tmp_path: Path) -> None:
         """When check returns exit code 1 (updates), all steps are executed."""
         from summit.cli.auto_update import _run
 
         subprocess_calls = []
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             subprocess_calls.append(list(cmd))
             result = MagicMock()
             if "summit.updates" in " ".join(cmd):
@@ -466,22 +485,26 @@ class TestAutoUpdate:
         all_cmds = [" ".join(c) for c in subprocess_calls]
 
         # Should have run prs (step 1)
-        assert any("summit.prs" in c for c in all_cmds), f"prs not called in: {all_cmds}"
+        assert any(
+            "summit.prs" in c for c in all_cmds), f"prs not called in: {all_cmds}"
         # Should have run komoot (step 2)
-        assert any("summit.komoot" in c for c in all_cmds), f"komoot not called in: {all_cmds}"
+        assert any(
+            "summit.komoot" in c for c in all_cmds), f"komoot not called in: {all_cmds}"
         # Should have run kom (step 3)
-        assert any("summit.kom" in c for c in all_cmds), f"kom not called in: {all_cmds}"
+        assert any(
+            "summit.kom" in c for c in all_cmds), f"kom not called in: {all_cmds}"
         # Should have run generate (step 4)
         assert any("summit.cli.generate" in c or "generate" in c for c in all_cmds), \
             f"generate not called in: {all_cmds}"
         # Should have run rclone (step 5)
-        assert any("rclone" in c for c in all_cmds), f"rclone not called in: {all_cmds}"
+        assert any(
+            "rclone" in c for c in all_cmds), f"rclone not called in: {all_cmds}"
 
-    def test_log_written(self, tmp_path):
+    def test_log_written(self, tmp_path: Path) -> None:
         """Log messages are written to the log file."""
         from summit.cli.auto_update import _run
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             result = MagicMock()
             result.returncode = 0  # no updates
             return result
@@ -493,11 +516,11 @@ class TestAutoUpdate:
         log_content = log.getvalue()
         assert "Auto-update" in log_content
 
-    def test_log_written_on_update_complete(self, tmp_path):
+    def test_log_written_on_update_complete(self, tmp_path: Path) -> None:
         """Completion message is logged after successful update."""
         from summit.cli.auto_update import _run
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             result = MagicMock()
             result.returncode = 1 if "summit.updates" in " ".join(cmd) else 0
             return result
@@ -509,19 +532,19 @@ class TestAutoUpdate:
         log_content = log.getvalue()
         assert "Auto-update complete" in log_content
 
-    def test_main_creates_log_file(self, tmp_path, monkeypatch):
+    def test_main_creates_log_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """main() creates the log file and appends to it."""
         from summit.cli import auto_update
 
-        log_file = tmp_path / "auto_update.log"
+        tmp_path / "auto_update.log"
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             result = MagicMock()
             result.returncode = 0
             return result
 
         with patch("summit.cli.auto_update.subprocess.run", fake_run), \
-             patch.object(auto_update, "Path") as mock_path_cls:
+                patch.object(auto_update, "Path") as mock_path_cls:
 
             mock_path_cls.home.return_value = tmp_path
             mock_log_file = MagicMock()
@@ -541,7 +564,7 @@ class TestAutoUpdate:
 
         call_count = {"n": 0}
 
-        def fake_run(cmd, **kwargs):
+        def fake_run(cmd: Any, **kwargs: Any) -> Any:
             result = MagicMock()
             result.returncode = 0  # always no updates
             return result

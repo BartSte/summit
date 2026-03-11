@@ -1,25 +1,25 @@
 """Tests for summit.updates — new activity/segment detection."""
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # check_garmin_activities
 # ---------------------------------------------------------------------------
 
+
 class TestCheckGarminActivities:
     """Tests for check_garmin_activities() in summit.updates."""
 
-    def _patch_rbw(self, monkeypatch):
+    def _patch_rbw(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(
             "summit.updates.get_credential",
             lambda service, field: "testuser" if field == "username" else "testpass",
         )
 
-    def test_new_activity_when_cache_empty(self, tmp_path, monkeypatch):
+    def test_new_activity_when_cache_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """When cache is empty, any activity is considered new."""
         from summit.updates import check_garmin_activities
 
@@ -47,13 +47,14 @@ class TestCheckGarminActivities:
             mock_tracks_path.exists.return_value = True
             mock_tracks_path.glob.return_value = []  # no cached files
             mock_path_cls.return_value = mock_tracks_path
-            mock_tracks_path.__truediv__ = lambda self, other: MagicMock(exists=lambda: False)
+            mock_tracks_path.__truediv__ = lambda self: MagicMock(
+                exists=lambda: False)
 
             info, is_new, err = check_garmin_activities()
             # With empty cache, is_new should be True
             assert is_new is True or err is not None  # either new or error from mock
 
-    def test_returns_error_on_garmin_exception(self, tmp_path, monkeypatch):
+    def test_returns_error_on_garmin_exception(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_garmin_activities
 
         self._patch_rbw(monkeypatch)
@@ -71,7 +72,7 @@ class TestCheckGarminActivities:
             assert err is not None
             assert "API error" in str(err)
 
-    def test_activity_already_in_cache_is_not_new(self, tmp_path, monkeypatch):
+    def test_activity_already_in_cache_is_not_new(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_garmin_activities
 
         self._patch_rbw(monkeypatch)
@@ -100,7 +101,7 @@ class TestCheckGarminActivities:
             cached_file.stat.return_value = MagicMock(st_mtime=1000.0)
             mock_path_instance.glob.return_value = [cached_file]
 
-            def truediv(self, other):
+            def truediv(self: object, other: object):
                 m = MagicMock()
                 m.exists.return_value = (str(other) == f"{activity_id}.json")
                 return m
@@ -119,7 +120,7 @@ class TestCheckGarminActivities:
 class TestCheckKomootSegments:
     """Tests for check_komoot_segments() in summit.updates."""
 
-    def _make_mock_api(self, planned_names):
+    def _make_mock_api(self, planned_names: Any):
         api = MagicMock()
         api.login.return_value = True
         api.get_user_tours_list.return_value = [
@@ -127,7 +128,7 @@ class TestCheckKomootSegments:
         ]
         return api
 
-    def test_no_difference_means_not_new(self, tmp_path, monkeypatch):
+    def test_no_difference_means_not_new(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_komoot_segments
 
         seg_names = ["SEG-Hill", "SEG-Flat"]
@@ -155,7 +156,7 @@ class TestCheckKomootSegments:
             if err is None and info is not None:
                 assert not is_new
 
-    def test_new_segment_detected(self, tmp_path, monkeypatch):
+    def test_new_segment_detected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_komoot_segments
 
         planned = ["SEG-Hill", "SEG-Flat", "SEG-NewClimb"]
@@ -170,7 +171,8 @@ class TestCheckKomootSegments:
 
         with patch("summit.updates.Path") as mock_path_cls:
             mock_dir = MagicMock()
-            mock_dir.glob.return_value = [MagicMock(stem=name) for name in cached]
+            mock_dir.glob.return_value = [
+                MagicMock(stem=name) for name in cached]
             mock_dir.mkdir = MagicMock()
             mock_path_cls.return_value = mock_dir
 
@@ -179,7 +181,7 @@ class TestCheckKomootSegments:
                 assert is_new
                 assert "SEG-NewClimb" in info["missing_in_cache"]
 
-    def test_login_failure_returns_error(self, monkeypatch):
+    def test_login_failure_returns_error(self, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_komoot_segments
 
         monkeypatch.setattr(
@@ -199,7 +201,7 @@ class TestCheckKomootSegments:
             info, is_new, err = check_komoot_segments()
             assert err == "Komoot login failed"
 
-    def test_api_exception_returns_error(self, monkeypatch):
+    def test_api_exception_returns_error(self, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_komoot_segments
 
         monkeypatch.setattr(
@@ -208,7 +210,8 @@ class TestCheckKomootSegments:
         )
         mock_api_instance = MagicMock()
         mock_api_instance.login.return_value = True
-        mock_api_instance.get_user_tours_list.side_effect = Exception("connection refused")
+        mock_api_instance.get_user_tours_list.side_effect = Exception(
+            "connection refused")
         monkeypatch.setattr("summit.updates.API", lambda: mock_api_instance)
 
         with patch("summit.updates.Path") as mock_path_cls:

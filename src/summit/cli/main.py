@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-"""
-Unified entry point for summit CLI.
+"""Unified entry point for the summit CLI.
 
 Usage: summit <subcommand> [args...]
 """
 import argparse
 import logging
 import sys
-
 
 SUBCOMMANDS = {
     "prs":         ("summit.prs",             "cycling/running personal records"),
@@ -21,7 +18,8 @@ SUBCOMMANDS = {
 }
 
 
-def main():
+def main() -> None:
+    """Parse the subcommand and delegate to the appropriate module."""
     parser = argparse.ArgumentParser(
         prog="summit",
         description="Garmin KOM & personal records tracker",
@@ -40,7 +38,8 @@ def main():
     args, remaining = parser.parse_known_args()
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s")
+        logging.basicConfig(level=logging.DEBUG,
+                            format="%(name)s %(levelname)s: %(message)s")
     else:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -55,7 +54,3 @@ def main():
 
     module = __import__(module_path, fromlist=["main"])
     module.main()
-
-
-if __name__ == "__main__":
-    main()

@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
-"""
-PHASE 1: SETUP — Build complete historical cache.
+"""PHASE 1: SETUP — Build complete historical cache.
+
 Collects 6 years of Garmin activities and all Komoot segments,
 then computes initial personal records.
 """
@@ -15,7 +14,8 @@ from summit.cli.generate import main as generate_main
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> None:
+    """Run the one-time historical cache build interactively."""
     logger.info("================================")
     logger.info("PHASE 1: SETUP")
     logger.info("================================")
@@ -30,12 +30,16 @@ def main():
     if reply not in ("y", "yes"):
         sys.exit(1)
 
-    start_date = (datetime.now() - timedelta(days=6 * 365)).strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=6 * 365)
+                  ).strftime("%Y-%m-%d")
     end_date = datetime.now().strftime("%Y-%m-%d")
 
     # Step 1: Build Garmin activity cache (6 years)
     logger.info(">>> Step 1: Caching Garmin activities (past 6 years)...")
-    logger.info("    This will download and cache GPX for all cycling and running activities.")
+    logger.info(
+        "    This will download and cache GPX for all cycling "
+        "and running activities."
+    )
     logger.info("    (Can take 10-20 minutes depending on activity count)")
     logger.info("    Date range: %s to %s", start_date, end_date)
     subprocess.run(
@@ -72,14 +76,18 @@ def main():
     logger.info("    ✓ KOM detection complete")
 
     # Step 3b: Generate personal records
-    logger.info(">>> Step 3b: Generating personal records (cycling + running + segment KOMs)...")
+    logger.info(
+        ">>> Step 3b: Generating personal records "
+        "(cycling + running + segment KOMs)..."
+    )
     generate_main()
     logger.info("    ✓ Personal records generated")
 
     # Step 4: Sync to Dropbox
     logger.info(">>> Step 4: Syncing to Dropbox...")
     subprocess.run(
-        ["rclone", "sync", str(Path.home() / "dropbox" / "org"), "dropbox:/org/"],
+        ["rclone", "sync", str(Path.home() / "dropbox" /
+                               "org"), "dropbox:/org/"],
         check=True,
     )
     logger.info("    ✓ Synced to Dropbox")
@@ -92,9 +100,6 @@ def main():
     logger.info("Output files:")
     logger.info("  ~/dropbox/org/personal_records.org (synced)")
     logger.info("")
-    logger.info("Next: Use 'summit check' to detect when new activities/segments arrive,")
+    logger.info(
+        "Next: Use 'summit check' to detect when new activities/segments arrive,")
     logger.info("      then run 'summit update' to update.")
-
-
-if __name__ == "__main__":
-    main()
