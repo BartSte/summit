@@ -89,8 +89,8 @@ class TestKomJsonToOrg:
 
         result = kom_json_to_org(str(kom_file))
 
-        assert "| Rank | Time | Avg speed | Date |" in result
-        assert "|------|------|-----------|------|" in result
+        assert "| Rank | Time | Avg speed | Avg power | Date |" in result
+        assert "|------|------|-----------|-----------|------|" in result
 
     def test_distance_and_ascent_in_output(self, tmp_path: Path, sample_kom_data: Any):
         kom_file = tmp_path / "kom.json"
@@ -100,6 +100,24 @@ class TestKomJsonToOrg:
 
         assert "2.35 km" in result
         assert "50 m" in result
+
+    def test_power_column_shown_when_present(self, tmp_path: Path, sample_kom_data: Any):
+        kom_file = tmp_path / "kom.json"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        result = kom_json_to_org(str(kom_file))
+
+        assert "215 W" in result
+
+    def test_power_column_empty_when_none(self, tmp_path: Path, sample_kom_data: Any):
+        kom_file = tmp_path / "kom.json"
+        kom_file.write_text(json.dumps(sample_kom_data))
+
+        result = kom_json_to_org(str(kom_file))
+
+        # The second entry in SEG-Test Hill has avg_power_w=None → empty power cell
+        # The row should contain an empty cell between speed and date: "| ... |  | ..."
+        assert "|  |" in result
 
     def test_top_times_limited_to_10(self, tmp_path: Path):
         top = [

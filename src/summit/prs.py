@@ -195,6 +195,25 @@ def downsample_activity(
     return kept
 
 
+def _parse_power_from_extensions(trkpt: ET.Element) -> Optional[float]:
+    """Extract power in watts from a GPX track point's extensions element.
+
+    Args:
+        trkpt: A ``<trkpt>`` XML element.
+
+    Returns:
+        Power in watts as a float, or None if not present.
+    """
+    for child in trkpt.iter():
+        local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if local == "power" and child.text:
+            try:
+                return float(child.text)
+            except ValueError:
+                pass
+    return None
+
+
 def parse_gpx_text(gpx_text: str) -> list[Any]:
     """Parse GPX XML text into a list of track points.
 
@@ -202,7 +221,8 @@ def parse_gpx_text(gpx_text: str) -> list[Any]:
         gpx_text: GPX file content as a string.
 
     Returns:
-        List of (lat, lon, time, ele) tuples, or empty list on parse error.
+        List of (lat, lon, time, ele, power) tuples, or empty list on parse
+        error. ``power`` is watts as a float, or None if not recorded.
     """
     try:
         root = ET.fromstring(gpx_text)
@@ -219,7 +239,8 @@ def parse_gpx_text(gpx_text: str) -> list[Any]:
         t = parse_time(t_el.text) if t_el is not None else None
         ele_el = trkpt.find("gpx:ele", ns)
         ele = float(ele_el.text) if ele_el is not None and ele_el.text else None
-        points.append((float(lat), float(lon), t, ele))
+        power = _parse_power_from_extensions(trkpt)
+        points.append((float(lat), float(lon), t, ele, power))
     return points
 
 
@@ -253,13 +274,15 @@ def save_cached_track(
     Args:
         cache_dir: Root cache directory path.
         activity_id: Garmin activity ID.
-        points: List of (lat, lon, time, ele) tuples.
+        points: List of (lat, lon, time, ele, power) tuples. ``power`` is
+            watts as a float, or None.
     """
     rows = []
     for p in points:
         t = p[2] if len(p) > 2 else None
         ele = p[3] if len(p) > 3 else None
-        rows.append([p[0], p[1], t.isoformat() if t else None, ele])
+        power = p[4] if len(p) > 4 else None
+        rows.append([p[0], p[1], t.isoformat() if t else None, ele, power])
     cache_track_path(cache_dir, activity_id).write_text(json.dumps(rows))
 
 
@@ -273,15 +296,19 @@ def load_cached_track(
         activity_id: Garmin activity ID.
 
     Returns:
-        List of (lat, lon, time, ele) tuples, or None if not cached.
+        List of (lat, lon, time, ele, power) tuples, or None if not cached.
+        ``power`` is watts as a float, or None if not recorded or not present
+        in an older cache file.
     """
     path = cache_track_path(cache_dir, activity_id)
     if not path.exists():
         return None
     rows = json.loads(path.read_text())
     points = []
-    for lat, lon, t, ele in rows:
-        points.append((lat, lon, parse_time(t) if t else None, ele))
+    for row in rows:
+        lat, lon, t, ele = row[0], row[1], row[2], row[3]
+        power = row[4] if len(row) > 4 else None
+        points.append((lat, lon, parse_time(t) if t else None, ele, power))
     return points
 
 
@@ -373,7 +400,7 @@ def compute_best_for_distance(
         cumdist.append(cumdist[-1] + d)
         cumtime.append(cumtime[-1] + dt)
 
-    best = None  # (duration_s, start_idx)
+    best = None  # (duration_s, start_idx, end_idx)
     j = 0
     for i in range(len(pts)):
         if j < i:
@@ -398,14 +425,20 @@ def compute_best_for_distance(
         if duration <= 0:
             continue
         if best is None or duration < best[0]:
-            best = (duration, i)
+            best = (duration, i, j)
     if best is None:
         return None
-    duration_s, start_idx = best
+    duration_s, start_idx, end_idx = best
     start_time = pts[start_idx][2]
+    power_vals = [
+        p[4] for p in pts[start_idx:end_idx + 1]
+        if len(p) > 4 and p[4] is not None
+    ]
+    avg_power_w = sum(power_vals) / len(power_vals) if power_vals else None
     return {
         "duration_s": duration_s,
         "start_time": start_time,
+        "avg_power_w": avg_power_w,
     }
 
 
@@ -480,6 +513,7 @@ def main() -> None:
                 "distance_km": dist_km,
                 "duration_s": duration,
                 "avg_kmh": avg_kmh,
+                "avg_power_w": best.get("avg_power_w"),
                 "activityId": activity_id,
                 "activityName": act.get("activityName"),
                 "startTimeLocal": act.get("startTimeLocal"),
@@ -518,7 +552,7 @@ def main() -> None:
             if not rows:
                 lines.append("- no results")
                 continue
-            headers = ["Rank", "Time", "Avg speed", "Date"]
+            headers = ["Rank", "Time", "Avg speed", "Avg power", "Date"]
             table_rows = []
             for i, r in enumerate(rows, 1):
                 d = r["duration_s"]
@@ -528,10 +562,13 @@ def main() -> None:
                 time_str = f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:d}:{s:02d}"
                 date = (r.get("startTimeLocal") or "").split()[
                     0]  # Extract date only
+                avg_power = r.get("avg_power_w")
+                power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
                 table_rows.append([
                     str(i),
                     time_str,
                     f"{(r.get('avg_kmh') or 0):.1f} km/h",
+                    power_str,
                     date,
                 ])
             cols = list(zip(*([headers] + table_rows))

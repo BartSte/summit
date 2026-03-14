@@ -110,11 +110,24 @@ class TestParseGpxText:
     def test_valid_gpx(self, sample_gpx_track: Any):
         points = parse_gpx_text(sample_gpx_track)
         assert len(points) == 5
-        lat, lon, t, ele = points[0]
+        lat, lon, t, ele, power = points[0]
         assert lat == pytest.approx(51.5)
         assert lon == pytest.approx(0.0)
         assert ele == pytest.approx(10.0)
         assert t is not None
+        assert power == pytest.approx(200.0)
+
+    def test_power_extracted_from_extensions(self, sample_gpx_track: Any):
+        points = parse_gpx_text(sample_gpx_track)
+        powers = [p[4] for p in points]
+        assert all(w is not None for w in powers)
+        assert powers == pytest.approx([200.0, 220.0, 210.0, 230.0, 215.0])
+
+    def test_no_power_returns_none(self):
+        from tests.conftest import SAMPLE_GPX_NO_TIMESTAMPS
+        points = parse_gpx_text(SAMPLE_GPX_NO_TIMESTAMPS)
+        for p in points:
+            assert p[4] is None
 
     def test_malformed_gpx_returns_empty(self):
         points = parse_gpx_text("not valid xml <<<")
@@ -129,7 +142,7 @@ class TestParseGpxText:
         points = parse_gpx_text(SAMPLE_GPX_NO_TIMESTAMPS)
         assert len(points) == 3
         # Timestamps should be None
-        for _, _, t, _ in points:
+        for _, _, t, _, _ in points:
             assert t is None
 
     def test_gpx_missing_lat_lon_skipped(self):
@@ -337,6 +350,27 @@ class TestComputeBestForDistance:
         assert result is not None
         assert "duration_s" in result
         assert "start_time" in result
+        assert "avg_power_w" in result
+
+    def test_avg_power_none_when_no_power(self):
+        pts = self._make_straight_points(
+            n=20, spacing_m=100.0, seconds_per_point=20.0)
+        result = compute_best_for_distance(pts, distance_m=500.0)
+        assert result is not None
+        assert result["avg_power_w"] is None
+
+    def test_avg_power_computed_when_present(self):
+        from datetime import timedelta
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        lat_step = 100.0 / 111_000
+        pts = [
+            (51.5 + i * lat_step, 0.0, t0 + timedelta(seconds=i * 20), 10.0, 200.0 + i * 10)
+            for i in range(20)
+        ]
+        result = compute_best_for_distance(pts, distance_m=500.0)
+        assert result is not None
+        assert result["avg_power_w"] is not None
+        assert result["avg_power_w"] > 0
 
 
 # ---------------------------------------------------------------------------
@@ -357,8 +391,8 @@ class TestCacheHelpers:
         t0 = datetime(2024, 6, 1, 9, 0, 0)
         from datetime import timedelta
         points = [
-            (51.5, 0.0, t0, 10.0),
-            (51.501, 0.001, t0 + timedelta(seconds=60), 12.0),
+            (51.5, 0.0, t0, 10.0, 200.0),
+            (51.501, 0.001, t0 + timedelta(seconds=60), 12.0, 220.0),
         ]
         save_cached_track(tmp_cache_dir, 12345, points)
         loaded = load_cached_track(tmp_cache_dir, 12345)
@@ -366,22 +400,40 @@ class TestCacheHelpers:
         assert len(loaded) == 2
         assert loaded[0][0] == pytest.approx(51.5)
         assert loaded[0][2] is not None  # timestamp preserved
+        assert loaded[0][4] == pytest.approx(200.0)  # power preserved
+
+    def test_save_and_load_power_none(self, tmp_cache_dir: Any):
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        points = [(51.5, 0.0, t0, 10.0, None)]
+        save_cached_track(tmp_cache_dir, 11111, points)
+        loaded = load_cached_track(tmp_cache_dir, 11111)
+        assert loaded is not None
+        assert loaded[0][4] is None
+
+    def test_load_legacy_4tuple_cache(self, tmp_cache_dir: Any):
+        """Old cache files with 4 elements per row should load with power=None."""
+        import json
+        path = tmp_cache_dir / "tracks" / "22222.json"
+        path.write_text(json.dumps([[51.5, 0.0, "2024-06-01T09:00:00+00:00", 10.0]]))
+        loaded = load_cached_track(tmp_cache_dir, 22222)
+        assert loaded is not None
+        assert loaded[0][4] is None
 
     def test_load_missing_returns_none(self, tmp_cache_dir: Any):
         result = load_cached_track(tmp_cache_dir, 999999)
         assert result is None
 
     def test_save_points_without_timestamps(self, tmp_cache_dir: Any):
-        points = [(51.5, 0.0, None, 10.0), (51.501, 0.001, None, 12.0)]
+        points = [(51.5, 0.0, None, 10.0, None), (51.501, 0.001, None, 12.0, None)]
         save_cached_track(tmp_cache_dir, 77777, points)
         loaded = load_cached_track(tmp_cache_dir, 77777)
         assert loaded is not None
-        for _, _, t, _ in loaded:
+        for _, _, t, _, _ in loaded:
             assert t is None
 
     def test_save_points_without_elevation(self, tmp_cache_dir: Any):
         t0 = datetime(2024, 6, 1, 9, 0, 0)
-        points = [(51.5, 0.0, t0, None)]
+        points = [(51.5, 0.0, t0, None, None)]
         save_cached_track(tmp_cache_dir, 88888, points)
         loaded = load_cached_track(tmp_cache_dir, 88888)
         assert loaded is not None
