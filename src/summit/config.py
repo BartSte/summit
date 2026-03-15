@@ -2,8 +2,20 @@
 
 Config path: ~/.config/summit/summit.json
 
-Read at most once per process. Missing file → empty dict (no error).
+The file is required. Missing file → CredentialError with setup instructions.
 Invalid JSON → json.JSONDecodeError is raised.
+
+Example config:
+    {
+        "garmin": {
+            "username": "bart@example.com",
+            "password_cmd": "rbw get --field password 'Garmin Connect'"
+        },
+        "komoot": {
+            "username_cmd": "rbw get --field username 'Komoot'",
+            "password_cmd": "rbw get --field password 'Komoot'"
+        }
+    }
 """
 import json
 from pathlib import Path
@@ -17,20 +29,22 @@ def _load() -> dict:
     """Read the config file from disk and return the parsed JSON dict.
 
     Returns:
-        Parsed config dict, or empty dict if the file does not exist.
+        Parsed config dict.
 
     Raises:
-        json.JSONDecodeError: If the file exists but contains invalid JSON.
+        FileNotFoundError: If the config file does not exist.
+        json.JSONDecodeError: If the file contains invalid JSON.
     """
-    try:
-        text = CONFIG_PATH.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return {}
-    return json.loads(text)
+    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
 def get_config() -> dict:
-    """Return parsed config dict (loaded once, then cached)."""
+    """Return parsed config dict (loaded once, then cached).
+
+    Raises:
+        FileNotFoundError: If the config file does not exist.
+        json.JSONDecodeError: If the file contains invalid JSON.
+    """
     global _cache
     if _cache is None:
         _cache = _load()

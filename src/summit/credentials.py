@@ -1,12 +1,23 @@
 """Pluggable credential system for summit.
 
-Priority chain for get_credential(service, field):
-1. SUMMIT_{SERVICE}_{FIELD} env var (direct value)
-2. SUMMIT_{SERVICE}_{FIELD}_CMD env var (shell command, stdout is the value)
-3. ~/.config/summit/summit.json (JSON config file)
-4. CredentialError with helpful message
+Credentials are read exclusively from ~/.config/summit/summit.json.
+
+For each field, the lookup order is:
+1. ``<field>_cmd`` key  — run as a shell command; stdout is the value.
+2. ``<field>``          — plain string value.
+
+Example config:
+    {
+        "garmin": {
+            "username": "bart@example.com",
+            "password_cmd": "rbw get --field password 'Garmin Connect'"
+        },
+        "komoot": {
+            "username_cmd": "rbw get --field username 'Komoot'",
+            "password_cmd": "rbw get --field password 'Komoot'"
+        }
+    }
 """
-import os
 import subprocess
 
 from summit.config import CONFIG_PATH, get_config
@@ -17,13 +28,11 @@ class CredentialError(Exception):
 
 
 def get_credential(service: str, field: str) -> str:
-    """Return a credential value by consulting the priority chain.
+    """Return a credential value from the JSON config file.
 
-    Priority:
-        1. ``SUMMIT_{SERVICE}_{FIELD}`` environment variable.
-        2. ``SUMMIT_{SERVICE}_{FIELD}_CMD`` environment variable (shell
-           command whose stdout is used as the value).
-        3. ``~/.config/summit/summit.json`` config file.
+    Lookup order within the service block:
+        1. ``<field>_cmd`` — shell command whose stdout is used as the value.
+        2. ``<field>``     — plain string value.
 
     Args:
         service: Service name, e.g. ``"garmin"`` or ``"komoot"``.
@@ -33,23 +42,20 @@ def get_credential(service: str, field: str) -> str:
         The resolved credential string.
 
     Raises:
-        CredentialError: If no source provides the credential.
+        CredentialError: If the credential cannot be resolved.
     """
-    key = (
-        f"SUMMIT_{service.upper().replace(' ', '_')}"
-        f"_{field.upper().replace(' ', '_')}"
-    )
+    svc = service.lower()
+    fld = field.lower()
 
-    # 1. Direct env var
-    value = os.environ.get(key)
-    if value is not None:
-        return value
+    cfg = get_config()
+    svc_cfg = cfg.get(svc, {})
 
-    # 2. Command env var
-    cmd = os.environ.get(f"{key}_CMD")
+    # 1. Command key
+    cmd = svc_cfg.get(f"{fld}_cmd")
     if cmd is not None:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True)
+            cmd, shell=True, capture_output=True, text=True
+        )
         if result.returncode != 0:
             raise CredentialError(
                 f"Credential command for {service}/{field} failed"
@@ -57,18 +63,19 @@ def get_credential(service: str, field: str) -> str:
             )
         return result.stdout.strip()
 
-    # 3. JSON config file
-    cfg = get_config()
-    value = cfg.get(service.lower(), {}).get(field.lower())
+    # 2. Plain value
+    value = svc_cfg.get(fld)
     if value is not None:
         return value
 
     raise CredentialError(
-        f"Missing credential for {service}/{field}.\n\n"
-        f"Set one of:\n"
-        f"  export {key}=\"your-{field}\"\n"
-        f"  export {key}_CMD=\"rbw get '{service.title()}'\"\n"
-        f"  export {key}_CMD=\"op item get '{service.title()}' --fields {field}\"\n"
-        f"  {CONFIG_PATH}  "
-        f"(JSON: {{\"{service.lower()}\": {{\"{field.lower()}\": \"value\"}}}})"
+        f"Missing credential '{field}' for service '{service}'.\n\n"
+        f"Add it to {CONFIG_PATH}:\n"
+        f'{{\n'
+        f'    "{svc}": {{\n'
+        f'        "{fld}": "your-{fld}",\n'
+        f'        "  or use a command:": "",\n'
+        f'        "{fld}_cmd": "rbw get --field {fld} \'{service.title()}\'"\n'
+        f'    }}\n'
+        f'}}'
     )
