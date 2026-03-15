@@ -14,9 +14,10 @@ class TestGetConfig:
     def teardown_method(self):
         _reset_cache()
 
-    def test_missing_file_returns_empty_dict(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    def test_missing_file_raises(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         monkeypatch.setattr("summit.config.CONFIG_PATH", tmp_path / "no.json")
-        assert get_config() == {}
+        with pytest.raises(FileNotFoundError):
+            get_config()
 
     def test_valid_file_returned_as_dict(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         f = tmp_path / "summit.json"
