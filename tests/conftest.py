@@ -19,22 +19,27 @@ SAMPLE_GPX_TRACK = textwrap.dedent("""\
           <trkpt lat="51.5000" lon="0.0000">
             <ele>10.0</ele>
             <time>2024-06-01T09:00:00Z</time>
+            <extensions><power>200</power></extensions>
           </trkpt>
           <trkpt lat="51.5010" lon="0.0010">
             <ele>15.0</ele>
             <time>2024-06-01T09:01:00Z</time>
+            <extensions><power>220</power></extensions>
           </trkpt>
           <trkpt lat="51.5020" lon="0.0020">
             <ele>12.0</ele>
             <time>2024-06-01T09:02:00Z</time>
+            <extensions><power>210</power></extensions>
           </trkpt>
           <trkpt lat="51.5030" lon="0.0030">
             <ele>8.0</ele>
             <time>2024-06-01T09:03:00Z</time>
+            <extensions><power>230</power></extensions>
           </trkpt>
           <trkpt lat="51.5040" lon="0.0040">
             <ele>5.0</ele>
             <time>2024-06-01T09:04:00Z</time>
+            <extensions><power>215</power></extensions>
           </trkpt>
         </trkseg>
       </trk>
@@ -122,6 +127,7 @@ SAMPLE_KOM_DATA = {
             "startTimeLocal": "2024-06-01 09:00:00",
             "duration_s": 330.0,
             "avg_speed_kmh": 25.5,
+            "avg_power_w": 215.0,
         },
         "matches": 3,
         "top": [
@@ -131,6 +137,7 @@ SAMPLE_KOM_DATA = {
                 "startTimeLocal": "2024-06-01 09:00:00",
                 "duration_s": 330.0,
                 "avg_speed_kmh": 25.5,
+                "avg_power_w": 215.0,
             },
             {
                 "id": 12345680,
@@ -138,6 +145,7 @@ SAMPLE_KOM_DATA = {
                 "startTimeLocal": "2024-06-10 08:30:00",
                 "duration_s": 345.0,
                 "avg_speed_kmh": 24.3,
+                "avg_power_w": None,
             },
         ],
         "distance_m": 2350.0,

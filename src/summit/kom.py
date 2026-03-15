@@ -571,7 +571,16 @@ def main() -> None:
                 if ele_el is not None and ele_el.text
                 else None
             )
-            points.append((float(lat), float(lon), t, ele))
+            power: Optional[float] = None
+            for child in trkpt.iter():
+                local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                if local == "power" and child.text:
+                    try:
+                        power = float(child.text)
+                    except ValueError:
+                        pass
+                    break
+            points.append((float(lat), float(lon), t, ele, power))
 
         if not points:
             continue
@@ -590,12 +599,22 @@ def main() -> None:
             duration_h = duration / 3600.0
             avg_speed_kmh = distance_km / duration_h if duration_h > 0 else 0
 
+            # Calculate average power (W) over the matched segment window
+            power_vals = [
+                p[4] for p in points[start_idx:end_idx + 1]
+                if len(p) > 4 and p[4] is not None
+            ]
+            avg_power_w: Optional[float] = (
+                sum(power_vals) / len(power_vals) if power_vals else None
+            )
+
             entry = {
                 "id": activity_id,
                 "name": act.get("activityName"),
                 "startTimeLocal": act.get("startTimeLocal"),
                 "duration_s": duration,
                 "avg_speed_kmh": avg_speed_kmh,
+                "avg_power_w": avg_power_w,
             }
             res["all"].append(entry)
             if res["best_seconds"] is None or duration < res["best_seconds"]:
@@ -627,14 +646,16 @@ def main() -> None:
             else:
                 lines.append("- Best: no matches")
             lines.append("")
-            lines.append("| Rank | Time | Avg speed | Date |")
-            lines.append("|------|------|-----------|------|")
+            lines.append("| Rank | Time | Avg speed | Avg power | Date |")
+            lines.append("|------|------|-----------|-----------|------|")
             for idx, activity in enumerate(data.get("top", [])[:10], 1):
                 time_hms = format_duration(activity["duration_s"])
                 date = (activity.get("startTimeLocal") or "").split()[0]
                 avg_speed = activity.get("avg_speed_kmh", 0)
+                avg_power = activity.get("avg_power_w")
+                power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
                 lines.append(
-                    f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {date} |"
+                    f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {power_str} | {date} |"
                 )
             lines.append("")
         return "\n".join(lines)
