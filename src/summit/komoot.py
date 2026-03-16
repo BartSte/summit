@@ -223,3 +223,7 @@ def main() -> None:
         downloaded = download_segments(api, args.prefix, args.cache_dir)
         logger.info("Downloaded %d segments to %s",
                     len(downloaded), args.cache_dir)
+
+
+if __name__ == "__main__":
+    main()
