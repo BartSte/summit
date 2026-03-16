@@ -6,10 +6,11 @@ from typing import Any
 
 import pytest
 
-from summit.prs import (CYCLING_TYPES, cache_track_path,
+from summit.prs import (CYCLING_TYPES, cache_meta_path, cache_track_path,
                         compute_best_for_distance, downsample_activity,
-                        ensure_cache_dirs, haversine_m, load_cached_track,
-                        parse_args, parse_gpx_text, parse_time, resolve_range,
+                        ensure_cache_dirs, haversine_m, load_cached_meta,
+                        load_cached_track, parse_args, parse_gpx_text,
+                        parse_time, resolve_range, save_cached_meta,
                         save_cached_track, want_activity)
 
 # ---------------------------------------------------------------------------
@@ -438,6 +439,29 @@ class TestCacheHelpers:
         loaded = load_cached_track(tmp_cache_dir, 88888)
         assert loaded is not None
         assert loaded[0][3] is None
+
+    # ------------------------------------------------------------------
+    # Meta sidecar
+    # ------------------------------------------------------------------
+
+    def test_cache_meta_path(self, tmp_cache_dir: Any):
+        path = cache_meta_path(tmp_cache_dir, 99999)
+        assert path == tmp_cache_dir / "tracks" / "99999.meta.json"
+
+    def test_save_and_load_meta_roundtrip(self, tmp_cache_dir: Any):
+        save_cached_meta(tmp_cache_dir, 12345, {"avg_power_w": 150.0})
+        meta = load_cached_meta(tmp_cache_dir, 12345)
+        assert meta is not None
+        assert meta["avg_power_w"] == pytest.approx(150.0)
+
+    def test_load_missing_meta_returns_none(self, tmp_cache_dir: Any):
+        assert load_cached_meta(tmp_cache_dir, 999999) is None
+
+    def test_meta_power_none_stored_and_loaded(self, tmp_cache_dir: Any):
+        save_cached_meta(tmp_cache_dir, 55555, {"avg_power_w": None})
+        meta = load_cached_meta(tmp_cache_dir, 55555)
+        assert meta is not None
+        assert meta["avg_power_w"] is None
 
 
 # ---------------------------------------------------------------------------
