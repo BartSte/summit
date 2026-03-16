@@ -128,3 +128,7 @@ def main() -> None:
         logger.info("Written to %s", args.output)
     else:
         print(content)
+
+
+if __name__ == "__main__":
+    main()

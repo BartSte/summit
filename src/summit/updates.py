@@ -201,3 +201,7 @@ def main() -> None:
         logger.info("✓ All caches are up-to-date")
 
     logger.info("=" * 70)
+
+
+if __name__ == "__main__":
+    main()

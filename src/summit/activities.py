@@ -608,3 +608,7 @@ def main() -> None:
                 logger.warning("rclone sync failed (%s)", e)
     else:
         print(content)
+
+
+if __name__ == "__main__":
+    main()

@@ -694,3 +694,7 @@ def main() -> None:
         Path(args.output).write_text(content)
     else:
         print(content)
+
+
+if __name__ == "__main__":
+    main()
