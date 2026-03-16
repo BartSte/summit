@@ -266,6 +266,53 @@ def cache_track_path(cache_dir: Path, activity_id: Any) -> Path:
     return cache_dir / TRACKS_DIRNAME / f"{activity_id}.json"
 
 
+def cache_meta_path(cache_dir: Path, activity_id: Any) -> Path:
+    """Return the file path for cached activity metadata.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+
+    Returns:
+        Path to the JSON metadata sidecar file for the activity.
+    """
+    return cache_dir / TRACKS_DIRNAME / f"{activity_id}.meta.json"
+
+
+def save_cached_meta(
+    cache_dir: Path, activity_id: Any, meta: dict[str, Any]
+) -> None:
+    """Save activity metadata to a sidecar JSON file.
+
+    Stores Garmin-reported summary values (e.g. ``avg_power_w``) that are
+    not available from the GPX track points.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+        meta: Dict of metadata fields to persist.
+    """
+    cache_meta_path(cache_dir, activity_id).write_text(json.dumps(meta))
+
+
+def load_cached_meta(
+    cache_dir: Path, activity_id: Any
+) -> Optional[dict[str, Any]]:
+    """Load cached activity metadata, or return None if absent.
+
+    Args:
+        cache_dir: Root cache directory path.
+        activity_id: Garmin activity ID.
+
+    Returns:
+        Metadata dict, or None if no sidecar file exists.
+    """
+    path = cache_meta_path(cache_dir, activity_id)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
 def save_cached_track(
     cache_dir: Path, activity_id: Any, points: list[Any]
 ) -> None:
@@ -497,6 +544,15 @@ def main() -> None:
             points_ds = downsample_activity(points_full, args.cache_spacing)
             save_cached_track(cache_dir, activity_id, points_ds)
 
+        # Always persist summary-level avgPower from the activity list.
+        # This is used as a fallback when the GPX contains no per-point power.
+        activity_avg_power = act.get("avgPower")
+        save_cached_meta(
+            cache_dir,
+            activity_id,
+            {"avg_power_w": activity_avg_power},
+        )
+
         for dist_km, dist_m in zip(distances_km, distances_m):
             best = compute_best_for_distance(
                 points_ds,
@@ -507,6 +563,10 @@ def main() -> None:
             )
             if not best:
                 continue
+            # Fall back to Garmin's reported avgPower when GPX has no
+            # per-point power data (Garmin strips power from GPX exports).
+            if best.get("avg_power_w") is None and activity_avg_power is not None:
+                best["avg_power_w"] = activity_avg_power
             duration = best["duration_s"]
             avg_kmh = (dist_km) / (duration / 3600.0) if duration > 0 else None
             entry = {
