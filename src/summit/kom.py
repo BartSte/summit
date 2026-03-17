@@ -17,7 +17,7 @@ try:
 except Exception:
     Garmin = None
 
-from summit.credentials import get_credential
+from summit.credentials import get_garmin_client
 
 CYCLING_TYPES = {
     "cycling",
@@ -509,10 +509,7 @@ def main() -> None:
     start_date = start.strftime("%Y-%m-%d")
     end_date = end.strftime("%Y-%m-%d")
 
-    user = get_credential("garmin", "username")
-    passwd = get_credential("garmin", "password")
-    client = Garmin(user, passwd)
-    client.login()
+    client = get_garmin_client()
 
     activities = fetch_activities(client, start_date, end_date)
     if args.limit_activities:

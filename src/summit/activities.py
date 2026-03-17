@@ -22,7 +22,7 @@ from pathlib import Path
 
 from garminconnect import Garmin
 
-from summit.credentials import get_credential
+from summit.credentials import get_credential, get_garmin_client
 
 logger = logging.getLogger(__name__)
 
@@ -503,10 +503,7 @@ def main() -> None:
     )
     client = None
     try:
-        user = get_credential("garmin", "username")
-        passwd = get_credential("garmin", "password")
-        client = Garmin(user, passwd)
-        client.login()
+        client = get_garmin_client()
         raw = fetch_activities(client, start_date, end_date)
         logger.info("Fetched: %d activities from API", len(raw))
     except Exception as e:

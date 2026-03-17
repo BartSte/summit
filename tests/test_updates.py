@@ -35,8 +35,7 @@ class TestCheckGarminActivities:
             }
         ]
 
-        self._patch_rbw(monkeypatch)
-        monkeypatch.setattr("summit.updates.Garmin", lambda u, p: mock_client)
+        monkeypatch.setattr("summit.updates.get_garmin_client", lambda: mock_client)
         monkeypatch.setattr(
             "summit.updates.check_garmin_activities.__code__",
             check_garmin_activities.__code__,
@@ -57,11 +56,10 @@ class TestCheckGarminActivities:
     def test_returns_error_on_garmin_exception(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_garmin_activities
 
-        self._patch_rbw(monkeypatch)
 
         mock_client = MagicMock()
         mock_client.get_activities.side_effect = Exception("API error")
-        monkeypatch.setattr("summit.updates.Garmin", lambda u, p: mock_client)
+        monkeypatch.setattr("summit.updates.get_garmin_client", lambda: mock_client)
 
         with patch("summit.updates.Path") as mock_path_cls:
             mock_tracks = MagicMock()
@@ -75,7 +73,6 @@ class TestCheckGarminActivities:
     def test_activity_already_in_cache_is_not_new(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from summit.updates import check_garmin_activities
 
-        self._patch_rbw(monkeypatch)
 
         activity_id = 12345
         tracks_dir = tmp_path / "tracks"
@@ -90,7 +87,7 @@ class TestCheckGarminActivities:
                 "startTimeLocal": "2024-06-01 09:00:00",
             }
         ]
-        monkeypatch.setattr("summit.updates.Garmin", lambda u, p: mock_client)
+        monkeypatch.setattr("summit.updates.get_garmin_client", lambda: mock_client)
 
         with patch("summit.updates.Path") as mock_path_cls:
             mock_path_instance = MagicMock()

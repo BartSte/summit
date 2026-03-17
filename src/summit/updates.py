@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
-from summit.credentials import get_credential
+from summit.credentials import get_credential, get_garmin_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,7 @@ def check_garmin_activities() -> tuple[dict | None, bool | None, str | None]:
 
     # Get latest activity from Garmin
     try:
-        user = get_credential("garmin", "username")
-        passwd = get_credential("garmin", "password")
-        client = Garmin(user, passwd)
-        client.login()
+        client = get_garmin_client()
 
         recent = client.get_activities(start=0, limit=1)
         if not recent or not isinstance(recent, list):

@@ -19,8 +19,11 @@ Example config:
     }
 """
 import subprocess
+from pathlib import Path
 
 from summit.config import CONFIG_PATH, get_config
+
+GARMIN_TOKEN_DIR = Path.home() / ".cache" / "garmin" / "tokens"
 
 
 class CredentialError(Exception):
@@ -79,3 +82,34 @@ def get_credential(service: str, field: str) -> str:
         f'    }}\n'
         f'}}'
     )
+
+
+def get_garmin_client() -> "Garmin":
+    """Return an authenticated Garmin client using cached OAuth tokens.
+
+    On first use, performs a full SSO login and saves tokens to
+    ``~/.cache/garmin/tokens``. On subsequent calls the tokens are loaded
+    from disk and the SSO flow is skipped entirely, preventing Garmin from
+    sending password-reset security emails.
+
+    Returns:
+        Authenticated :class:`garminconnect.Garmin` instance.
+
+    Raises:
+        CredentialError: If credentials are missing.
+        ImportError: If garminconnect is not installed.
+    """
+    try:
+        from garminconnect import Garmin
+    except ImportError as e:
+        raise ImportError(
+            "garminconnect not installed. Run: pipx inject summit garminconnect"
+        ) from e
+
+    user = get_credential("garmin", "username")
+    passwd = get_credential("garmin", "password")
+
+    GARMIN_TOKEN_DIR.mkdir(parents=True, exist_ok=True)
+    client = Garmin(user, passwd)
+    client.login(tokenstore=str(GARMIN_TOKEN_DIR))
+    return client
