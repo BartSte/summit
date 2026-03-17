@@ -118,5 +118,5 @@ def get_garmin_client() -> "Garmin":
     else:
         # First run: full SSO login, then persist tokens for future calls
         client.login()
-        client.garth.save(str(GARMIN_TOKEN_DIR))
+        client.garth.dump(str(GARMIN_TOKEN_DIR))
     return client
