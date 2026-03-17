@@ -528,7 +528,8 @@ def main() -> None:
             for x in args.power_durations.split(",")
             if x.strip()
         ]
-    power_results: dict[str, list[Any]] = {str(d): [] for d in power_durations_min}
+    power_results: dict[str, list[Any]] = {
+        str(d): [] for d in power_durations_min}
 
     for act in activities:
         at = act.get("activityType", {})
@@ -627,62 +628,14 @@ def main() -> None:
             power_results[k], key=lambda x: x["max_avg_power_w"], reverse=True
         )[: args.top]
 
-    def render_power_org(power_results_dict: dict) -> str:
-        """Render max avg power PRs as org-mode formatted text.
-
-        Args:
-            power_results_dict: Dict mapping duration-in-minutes strings to
-                lists of power PR entries.
-
-        Returns:
-            Org-mode formatted string with headers and tables.
-        """
-        lines = ["* Max Avg Power PRs"]
-        for dur_min_str, entries in power_results_dict.items():
-            dur_min = float(dur_min_str)
-            dur_label = (
-                f"{int(dur_min)} min"
-                if dur_min == int(dur_min)
-                else f"{dur_min} min"
-            )
-            lines.append(f"** {dur_label}")
-            if not entries:
-                lines.append("- no results")
-                continue
-            headers = ["Rank", "Avg power", "Date"]
-            table_rows = []
-            for i, r in enumerate(entries, 1):
-                date = (r.get("startTimeLocal") or "").split()[0]
-                power_w = r["max_avg_power_w"]
-                table_rows.append([
-                    str(i),
-                    f"{power_w:.0f} W",
-                    date,
-                ])
-            cols = list(zip(*([headers] + table_rows)))
-            widths = [max(len(str(cell)) for cell in col) for col in cols]
-
-            def fmt_row(cells: Any) -> str:
-                return (
-                    "| "
-                    + " | ".join(
-                        str(c).ljust(widths[i]) for i, c in enumerate(cells)
-                    )
-                    + " |"
-                )
-
-            lines.append(fmt_row(headers))
-            lines.append("|" + "+".join("-" * (w + 2) for w in widths) + "|")
-            for row in table_rows:
-                lines.append(fmt_row(row))
-        return "\n".join(lines) + "\n"
-
-    def render_org(results_dict: dict) -> str:
+    def render_org(results_dict: dict, power_results_dict: dict) -> str:
         """Render PR results as org-mode formatted text.
 
         Args:
             results_dict: Dict mapping distance strings to lists of PR
                 entries.
+            power_results_dict: Dict mapping duration-in-minutes strings to
+                lists of power PR entries.
 
         Returns:
             Org-mode formatted string with headers and tables.
@@ -693,9 +646,10 @@ def main() -> None:
         lines.append(f"- Time mode: {args.time_mode}")
         lines.append(
             f"- Distances: {', '.join(str(d) for d in distances_km)} km")
+        lines.append("** Time")
         for dist in distances_km:
             key = str(dist)
-            lines.append(f"** {dist:.1f} km")
+            lines.append(f"*** {dist:.1f} km")
             rows = results_dict.get(key, [])
             if not rows:
                 lines.append("- no results")
@@ -723,7 +677,7 @@ def main() -> None:
                         ) if table_rows else list(zip(*([headers])))
             widths = [max(len(str(cell)) for cell in col) for col in cols]
 
-            def fmt_row(cells: Any) -> str:
+            def fmt_row_dist(cells: Any) -> str:
                 """Format a list of cells as a padded org-mode table row.
 
                 Args:
@@ -740,16 +694,73 @@ def main() -> None:
                     )
                     + " |"
                 )
-            lines.append(fmt_row(headers))
+            lines.append(fmt_row_dist(headers))
             lines.append("|" + "+".join("-" * (w + 2) for w in widths) + "|")
             for r in table_rows:
-                lines.append(fmt_row(r))
+                lines.append(fmt_row_dist(r))
+
+        if power_results_dict:
+            dur_labels = []
+            for dur_min_str in power_results_dict:
+                dur_min = float(dur_min_str)
+                dur_labels.append(
+                    f"{int(dur_min)} min"
+                    if dur_min == int(dur_min)
+                    else f"{dur_min} min"
+                )
+            lines.append("** Max average power")
+            lines.append(f"- Times: {', '.join(dur_labels)}")
+            for dur_min_str, entries in power_results_dict.items():
+                dur_min = float(dur_min_str)
+                dur_label = (
+                    f"{int(dur_min)} min"
+                    if dur_min == int(dur_min)
+                    else f"{dur_min} min"
+                )
+                lines.append(f"*** {dur_label}")
+                if not entries:
+                    lines.append("- no results")
+                    continue
+                headers = ["Rank", "Avg power", "Date"]
+                table_rows = []
+                for i, r in enumerate(entries, 1):
+                    date = (r.get("startTimeLocal") or "").split()[0]
+                    power_w = r["max_avg_power_w"]
+                    table_rows.append([
+                        str(i),
+                        f"{power_w:.0f} W",
+                        date,
+                    ])
+                cols = list(zip(*([headers] + table_rows)))
+                widths = [max(len(str(cell)) for cell in col) for col in cols]
+
+                def fmt_row_power(cells: Any) -> str:
+                    """Format a list of cells as a padded org-mode table row.
+
+                    Args:
+                        cells: Iterable of cell values to format.
+
+                    Returns:
+                        Org-mode table row string with cell separators.
+                    """
+                    return (
+                        "| "
+                        + " | ".join(
+                            str(c).ljust(widths[i]) for i, c in enumerate(cells)
+                        )
+                        + " |"
+                    )
+
+                lines.append(fmt_row_power(headers))
+                lines.append("|" + "+".join("-" * (w + 2)
+                             for w in widths) + "|")
+                for row in table_rows:
+                    lines.append(fmt_row_power(row))
+
         return "\n".join(lines) + "\n"
 
     if args.format == "org":
-        content = render_org(results)
-        if power_results:
-            content += "\n" + render_power_org(power_results)
+        content = render_org(results, power_results)
     else:
         content = json.dumps(
             {"distance_prs": results, "power_prs": power_results}, indent=2
