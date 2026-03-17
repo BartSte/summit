@@ -111,5 +111,12 @@ def get_garmin_client() -> "Garmin":
 
     GARMIN_TOKEN_DIR.mkdir(parents=True, exist_ok=True)
     client = Garmin(user, passwd)
-    client.login(tokenstore=str(GARMIN_TOKEN_DIR))
+    token_file = GARMIN_TOKEN_DIR / "oauth1_token.json"
+    if token_file.exists():
+        # Tokens cached — skip SSO entirely
+        client.login(tokenstore=str(GARMIN_TOKEN_DIR))
+    else:
+        # First run: full SSO login, then persist tokens for future calls
+        client.login()
+        client.garth.save(str(GARMIN_TOKEN_DIR))
     return client

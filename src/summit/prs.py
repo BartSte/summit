@@ -72,6 +72,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", default=None, help="Write output to file")
     p.add_argument("--format", choices=["json", "org"],
                    default="json", help="Output format (default: json)")
+    p.add_argument(
+        "--power-durations",
+        default="20",
+        help="Comma-separated durations in minutes for max avg power PRs "
+             "(e.g. '5,20,60'). Set to '' to disable. Default: '20'.",
+    )
     return p.parse_args()
 
 
@@ -515,6 +521,15 @@ def main() -> None:
 
     results = {str(d): [] for d in distances_km}
 
+    power_durations_min: list[float] = []
+    if args.power_durations.strip() and args.activity in ("cycling", "all"):
+        power_durations_min = [
+            float(x.strip())
+            for x in args.power_durations.split(",")
+            if x.strip()
+        ]
+    power_results: dict[str, list[Any]] = {str(d): [] for d in power_durations_min}
+
     for act in activities:
         at = act.get("activityType", {})
         typekey = at.get("typeKey") or at.get("parentTypeKey")
@@ -541,14 +556,34 @@ def main() -> None:
             points_ds = downsample_activity(points_full, args.cache_spacing)
             save_cached_track(cache_dir, activity_id, points_ds)
 
-        # Always persist summary-level avgPower from the activity list.
-        # This is used as a fallback when the GPX contains no per-point power.
+        # Persist summary-level power metrics from the activity list.
+        # avg_power_w is a fallback for GPX (which strips per-point power).
+        # max_avg_power stores Garmin's best-effort max-average-power values
+        # keyed by duration in seconds, used for power PR calculations.
         activity_avg_power = act.get("avgPower")
+        max_avg_power: dict[str, float] = {}
+        for dur_s in (300, 600, 1200, 1800, 3600):
+            val = act.get(f"maxAvgPower_{dur_s}")
+            if val is not None:
+                max_avg_power[str(dur_s)] = float(val)
         save_cached_meta(
             cache_dir,
             activity_id,
-            {"avg_power_w": activity_avg_power},
+            {"avg_power_w": activity_avg_power, "max_avg_power": max_avg_power},
         )
+
+        # Collect max avg power PRs from Garmin summary metadata
+        for dur_min in power_durations_min:
+            dur_s = str(int(dur_min * 60))
+            power_w = max_avg_power.get(dur_s)
+            if power_w is not None:
+                power_results[str(dur_min)].append({
+                    "duration_min": dur_min,
+                    "max_avg_power_w": power_w,
+                    "activityId": activity_id,
+                    "activityName": act.get("activityName"),
+                    "startTimeLocal": act.get("startTimeLocal"),
+                })
 
         for dist_km, dist_m in zip(distances_km, distances_m):
             best = compute_best_for_distance(
@@ -585,6 +620,62 @@ def main() -> None:
     for k in list(results.keys()):
         results[k] = sorted(results[k], key=lambda x: x["duration_s"])[
             : args.top]
+
+    # Sort power results by power descending, keep top N
+    for k in list(power_results.keys()):
+        power_results[k] = sorted(
+            power_results[k], key=lambda x: x["max_avg_power_w"], reverse=True
+        )[: args.top]
+
+    def render_power_org(power_results_dict: dict) -> str:
+        """Render max avg power PRs as org-mode formatted text.
+
+        Args:
+            power_results_dict: Dict mapping duration-in-minutes strings to
+                lists of power PR entries.
+
+        Returns:
+            Org-mode formatted string with headers and tables.
+        """
+        lines = ["* Max Avg Power PRs"]
+        for dur_min_str, entries in power_results_dict.items():
+            dur_min = float(dur_min_str)
+            dur_label = (
+                f"{int(dur_min)} min"
+                if dur_min == int(dur_min)
+                else f"{dur_min} min"
+            )
+            lines.append(f"** {dur_label}")
+            if not entries:
+                lines.append("- no results")
+                continue
+            headers = ["Rank", "Avg power", "Date"]
+            table_rows = []
+            for i, r in enumerate(entries, 1):
+                date = (r.get("startTimeLocal") or "").split()[0]
+                power_w = r["max_avg_power_w"]
+                table_rows.append([
+                    str(i),
+                    f"{power_w:.0f} W",
+                    date,
+                ])
+            cols = list(zip(*([headers] + table_rows)))
+            widths = [max(len(str(cell)) for cell in col) for col in cols]
+
+            def fmt_row(cells: Any) -> str:
+                return (
+                    "| "
+                    + " | ".join(
+                        str(c).ljust(widths[i]) for i, c in enumerate(cells)
+                    )
+                    + " |"
+                )
+
+            lines.append(fmt_row(headers))
+            lines.append("|" + "+".join("-" * (w + 2) for w in widths) + "|")
+            for row in table_rows:
+                lines.append(fmt_row(row))
+        return "\n".join(lines) + "\n"
 
     def render_org(results_dict: dict) -> str:
         """Render PR results as org-mode formatted text.
@@ -657,8 +748,12 @@ def main() -> None:
 
     if args.format == "org":
         content = render_org(results)
+        if power_results:
+            content += "\n" + render_power_org(power_results)
     else:
-        content = json.dumps(results, indent=2)
+        content = json.dumps(
+            {"distance_prs": results, "power_prs": power_results}, indent=2
+        )
 
     if args.output:
         Path(args.output).write_text(content)

@@ -33,6 +33,7 @@ def main() -> None:
             sys.executable, "-m", "summit.prs",
             "--activity", "cycling",
             "--distances", "1,5,10,20,30,40,50,60,70,80,90,100",
+            "--power-durations", "20",
             "--format", "org",
             "--start", start_date,
             "--end", end_date,
