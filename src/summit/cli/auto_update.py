@@ -105,7 +105,7 @@ def _run(log: IO[str]) -> None:
     p(">>> Step 5: Syncing to Dropbox...")
     org_file = str(Path.home() / "dropbox" / "org" / "personal_records.org")
     run(
-        ["rclone", "sync", org_file, "dropbox:/org/"],
+        ["rclone", "copy", org_file, "dropbox:/org/"],
         check=True,
     )
     p("    ✓ Synced to Dropbox")
