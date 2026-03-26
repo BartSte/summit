@@ -74,9 +74,9 @@ def parse_args() -> argparse.Namespace:
                    default="json", help="Output format (default: json)")
     p.add_argument(
         "--power-durations",
-        default="20",
+        default="1,2,5,10",
         help="Comma-separated durations in minutes for max avg power PRs "
-             "(e.g. '5,20,60'). Set to '' to disable. Default: '20'.",
+             "(e.g. '5,20,60'). Set to '' to disable. Default: '1,2,5,10'.",
     )
     return p.parse_args()
 
@@ -563,7 +563,7 @@ def main() -> None:
         # keyed by duration in seconds, used for power PR calculations.
         activity_avg_power = act.get("avgPower")
         max_avg_power: dict[str, float] = {}
-        for dur_s in (300, 600, 1200, 1800, 3600):
+        for dur_s in (60, 120, 300, 600, 1200, 1800, 3600):
             val = act.get(f"maxAvgPower_{dur_s}")
             if val is not None:
                 max_avg_power[str(dur_s)] = float(val)
