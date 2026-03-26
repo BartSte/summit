@@ -74,9 +74,9 @@ def parse_args() -> argparse.Namespace:
                    default="json", help="Output format (default: json)")
     p.add_argument(
         "--power-durations",
-        default="1,2,5,10",
+        default="1,2,5,10,20",
         help="Comma-separated durations in minutes for max avg power PRs "
-             "(e.g. '5,20,60'). Set to '' to disable. Default: '1,2,5,10'.",
+             "(e.g. '5,20,60'). Set to '' to disable. Default: '1,2,5,10,20'.",
     )
     return p.parse_args()
 
