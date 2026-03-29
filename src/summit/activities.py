@@ -377,8 +377,8 @@ def summary_table(by_week: dict, intensity_by_week: dict, year: int) -> str:
     """
     last_week = current_iso_week(year)
 
-    header = "| Week | Month     | Duration |     km | Mod | Vig | Intensity |"
-    sep = "|------+-----------+----------+--------+-----+-----+-----------|"
+    header = "| Week | Month     | Duration |     km |"
+    sep = "|------+-----------+----------+--------|"
 
     rows = []
     for week in range(1, last_week + 1):
@@ -391,18 +391,8 @@ def summary_table(by_week: dict, intensity_by_week: dict, year: int) -> str:
         dur = fmt_duration(total_s) if total_s else "-"
         km_str = f"{total_km:.1f}" if total_km >= 0.1 else "-"
 
-        idata = intensity_by_week.get(week, {})
-        mod = idata.get("moderateValue", 0) or 0
-        vig = idata.get("vigorousValue", 0) or 0
-        effective = mod + vig * 2
-
-        mod_str = str(mod) if idata else "-"
-        vig_str = str(vig) if idata else "-"
-        eff_str = str(effective) if idata else "-"
-
         rows.append(
-            f"| {week:>4} | {label:<9} | {dur:>8} | {km_str:>6} "
-            f"| {mod_str:>3} | {vig_str:>3} | {eff_str:>9} |"
+            f"| {week:>4} | {label:<9} | {dur:>8} | {km_str:>6} |"
         )
 
     lines = [header, sep] + rows
@@ -456,8 +446,6 @@ def generate_org(by_week: dict, intensity_by_week: dict, year: int) -> str:
         acts = by_week.get(week_key, [])
         lines.append(f"* Week {week:02d} · {label}")
         lines.append("")
-        if week in intensity_by_week:
-            lines.append(intensity_line(intensity_by_week[week]))
         lines.append(org_table(acts))
 
     return "\n".join(lines)
