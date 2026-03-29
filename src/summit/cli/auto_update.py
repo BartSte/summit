@@ -38,6 +38,26 @@ def _run(log: IO[str]) -> None:
     p(f"Auto-update: {datetime.now()}")
     p("=========================================")
 
+    # Step 0: Prune deleted activities from cache
+    p(">>> Step 0: Pruning deleted activities from cache...")
+    try:
+        from summit.updates import prune_deleted_activities
+        pruned = prune_deleted_activities(window=60)
+        if pruned.get("error"):
+            p(f"    ⚠ Prune error: {pruned['error']}")
+        else:
+            total = len(pruned.get("pruned_tracks", [])) + len(pruned.get("pruned_meta", []))
+            if total:
+                p(f"    ✓ Removed {total} deleted activity/activities from cache")
+                for aid in pruned.get("pruned_tracks", []):
+                    p(f"      - track: {aid}")
+                for aid in pruned.get("pruned_meta", []):
+                    p(f"      - meta:  {aid}")
+            else:
+                p("    ✓ No deleted activities found")
+    except Exception as e:
+        p(f"    ⚠ Prune step failed (non-fatal): {e}")
+
     # Check for updates (exit 0 = no updates, exit 1 = updates available)
     p(">>> Checking for updates...")
     result = run(

@@ -83,6 +83,98 @@ def check_garmin_activities() -> tuple[dict | None, bool | None, str | None]:
         return None, None, str(e)
 
 
+def prune_deleted_activities(window: int = 60) -> dict:
+    """Remove cached activities that no longer exist on Garmin Connect.
+
+    Fetches the last ``window`` activities from Garmin, determines the
+    earliest start date in that batch, then removes any locally cached
+    entries (tracks/ + activity_meta/) whose IDs fall within that window
+    but are absent from the live list.
+
+    Args:
+        window: Number of recent activities to fetch for reconciliation.
+
+    Returns:
+        Dict with keys ``pruned_tracks``, ``pruned_meta``, ``error``.
+    """
+    import json
+
+    tracks_dir = Path("/home/barts/.cache/garmin/tracks")
+    meta_dir = Path("/home/barts/.cache/garmin/activity_meta")
+
+    result: dict = {"pruned_tracks": [], "pruned_meta": [], "error": None}
+
+    try:
+        client = get_garmin_client()
+        recent = client.get_activities(start=0, limit=window)
+    except Exception as e:
+        result["error"] = str(e)
+        return result
+
+    if not recent or not isinstance(recent, list):
+        return result
+
+    live_ids = {str(a.get("activityId")) for a in recent}
+
+    # Determine earliest start time in the fetched window
+    times = []
+    for a in recent:
+        ts = a.get("startTimeLocal") or a.get("startTimeGMT") or ""
+        try:
+            times.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+        except Exception:
+            pass
+    if not times:
+        return result
+    window_start = min(times)
+
+    # --- Prune tracks/ ---
+    if tracks_dir.exists():
+        for f in tracks_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+                act_id = str(data.get("activityId") or f.stem)
+                ts = data.get("startTimeLocal") or data.get("startTimeGMT") or ""
+                act_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if act_dt >= window_start and act_id not in live_ids:
+                f.unlink()
+                result["pruned_tracks"].append(act_id)
+                logger.info("Pruned deleted activity from tracks cache: %s", act_id)
+
+    # --- Prune activity_meta/YYYY.json ---
+    if meta_dir.exists():
+        for meta_file in meta_dir.glob("*.json"):
+            try:
+                entries = json.loads(meta_file.read_text())
+                if not isinstance(entries, list):
+                    continue
+                before = len(entries)
+                kept = []
+                pruned = []
+                for entry in entries:
+                    act_id = str(entry.get("activityId", ""))
+                    ts = entry.get("startTimeLocal") or ""
+                    try:
+                        act_dt = datetime.fromisoformat(ts)
+                    except Exception:
+                        kept.append(entry)
+                        continue
+                    if act_dt >= window_start and act_id not in live_ids:
+                        pruned.append(act_id)
+                        logger.info("Pruned deleted activity from meta cache: %s", act_id)
+                    else:
+                        kept.append(entry)
+                if pruned:
+                    meta_file.write_text(json.dumps(kept, indent=2))
+                    result["pruned_meta"].extend(pruned)
+            except Exception as e:
+                logger.warning("Could not process meta file %s: %s", meta_file, e)
+
+    return result
+
+
 def check_komoot_segments() -> tuple[_KomootInfo | None, bool | None, str | None]:
     """Check whether Komoot segment cache is in sync with planned tours.
 
