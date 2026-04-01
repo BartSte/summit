@@ -98,6 +98,7 @@ def main() -> None:
         [
             "rclone",
             "sync",
+            "--ignore-times",
             str(Path.home() / "dropbox" / "org"),
             "dropbox:/org/",
         ],
