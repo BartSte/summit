@@ -66,6 +66,28 @@ def _run(log: IO[str]) -> None:
     )
     if result.returncode == 0:
         p("✓ No updates needed")
+        # Even when the cache is current, check if personal_records.org needs
+        # regenerating (e.g. a previous run cached activities but crashed before
+        # the generate step, leaving the org file stale).
+        org_file = Path.home() / "dropbox" / "org" / "personal_records.org"
+        tracks_dir = Path.home() / ".cache" / "garmin" / "tracks"
+        needs_regen = False
+        if tracks_dir.exists():
+            track_mtimes = [
+                f.stat().st_mtime
+                for f in tracks_dir.glob("*.json")
+                if ".meta." not in f.name
+            ]
+            if track_mtimes:
+                latest_track_mtime = max(track_mtimes)
+                if not org_file.exists() or org_file.stat().st_mtime < latest_track_mtime:
+                    needs_regen = True
+                    p("    ↳ personal_records.org is older than cache — regenerating...")
+        if not needs_regen:
+            return
+        # Cache is current but org file is stale — regenerate without re-fetching
+        run([sys.executable, "-m", "summit.cli.generate"], check=True)
+        p("    ✓ Personal records regenerated")
         return
 
     p(">>> Updates detected - processing...")
