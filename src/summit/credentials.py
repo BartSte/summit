@@ -111,12 +111,27 @@ def get_garmin_client() -> "Garmin":
 
     GARMIN_TOKEN_DIR.mkdir(parents=True, exist_ok=True)
     client = Garmin(user, passwd)
-    token_file = GARMIN_TOKEN_DIR / "oauth1_token.json"
-    if token_file.exists():
-        # Tokens cached — skip SSO entirely
+
+    old_token_file = GARMIN_TOKEN_DIR / "oauth1_token.json"
+    new_token_file = GARMIN_TOKEN_DIR / "garmin_tokens.json"
+
+    if new_token_file.exists():
         client.login(tokenstore=str(GARMIN_TOKEN_DIR))
-    else:
-        # First run: full SSO login, then persist tokens for future calls
-        client.login()
+        return client
+
+    if old_token_file.exists():
+        client.login(tokenstore=str(GARMIN_TOKEN_DIR))
+        return client
+
+    # First run: full SSO login, then persist tokens for future calls.
+    # Support both the older garth-backed client and newer DI-token client.
+    client.login()
+    if hasattr(client, "garth"):
         client.garth.dump(str(GARMIN_TOKEN_DIR))
+    elif hasattr(client, "client") and hasattr(client.client, "dump"):
+        client.client.dump(str(GARMIN_TOKEN_DIR))
+    else:
+        raise RuntimeError(
+            "Garmin client logged in but token persistence is unsupported"
+        )
     return client

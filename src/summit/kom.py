@@ -527,6 +527,7 @@ def main() -> None:
         }
         for s in segments
     }
+    latest_activity: Optional[dict[str, Any]] = None
 
     for act in activities:
         at = act.get("activityType", {})
@@ -536,6 +537,16 @@ def main() -> None:
         activity_id = act.get("activityId")
         if not activity_id:
             continue
+        start_time = act.get("startTimeLocal") or act.get("startTimeGMT")
+        if start_time and (
+            latest_activity is None
+            or start_time > (latest_activity.get("startTimeLocal") or "")
+        ):
+            latest_activity = {
+                "id": activity_id,
+                "name": act.get("activityName"),
+                "startTimeLocal": start_time,
+            }
         # Download GPX for this activity
         try:
             gpx_data = client.download_activity(
@@ -659,24 +670,38 @@ def main() -> None:
 
     # Output
     out = {}
+    latest_activity_id = latest_activity["id"] if latest_activity else None
     for name, res in results.items():
+        sorted_all = sorted(res["all"], key=lambda x: x["duration_s"])
+        recent_ride_match = None
+        if latest_activity_id is not None:
+            for rank, activity in enumerate(sorted_all, 1):
+                if str(activity.get("id")) == str(latest_activity_id):
+                    recent_ride_match = {
+                        **activity,
+                        "rank": rank,
+                        "is_kom": rank == 1,
+                    }
+                    break
         if res["best_seconds"] is None:
             out[name] = {
                 "best": None,
                 "matches": 0,
                 "top": [],
+                "recent_ride_match": recent_ride_match,
                 "distance_m": res["distance_m"],
                 "ascent_m": res["ascent_m"],
                 "descent_m": res["descent_m"],
             }
         else:
-            top = sorted(res["all"], key=lambda x: x["duration_s"])[: args.top]
+            top = sorted_all[: args.top]
             out[name] = {
                 "best": format_duration(res["best_seconds"]),
                 "best_seconds": res["best_seconds"],
                 "activity": res["activity"],
                 "matches": res["matches"],
                 "top": top,
+                "recent_ride_match": recent_ride_match,
                 "distance_m": res["distance_m"],
                 "ascent_m": res["ascent_m"],
                 "descent_m": res["descent_m"],

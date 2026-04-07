@@ -58,12 +58,16 @@ def _run(log: IO[str]) -> None:
     except Exception as e:
         p(f"    ⚠ Prune step failed (non-fatal): {e}")
 
-    # Check for updates (exit 0 = no updates, exit 1 = updates available)
+    # Check for updates (exit 0 = no updates, exit 1 = updates available,
+    # exit 2 = check failed and should back off)
     p(">>> Checking for updates...")
     result = run(
         [sys.executable, "-m", "summit.updates", "--quiet"],
         check=False,
     )
+    if result.returncode == 2:
+        p("⚠ Update check failed, skipping this run to avoid repeated login attempts")
+        return
     if result.returncode == 0:
         p("✓ No updates needed")
         # Even when the cache is current, check if personal_records.org needs

@@ -13,6 +13,10 @@ from summit.credentials import get_credential, get_garmin_client
 logger = logging.getLogger(__name__)
 
 
+class GarminUpdatesCheckError(RuntimeError):
+    """Raised when the Garmin updates check cannot determine a reliable result."""
+
+
 class _KomootInfo(TypedDict):
     cached_segments: int
     planned_segments: int
@@ -237,9 +241,12 @@ def main() -> None:
 
     # Summary
     updates_needed = (garmin_new or False) or (komoot_new or False)
+    has_errors = bool(garmin_err or komoot_err)
 
     if args.quiet:
-        # Quiet mode: exit with code 1 if updates needed
+        # Quiet mode: exit 1 if updates are needed, 2 if the check failed.
+        if has_errors:
+            sys.exit(2)
         sys.exit(1 if updates_needed else 0)
 
     # Verbose output
@@ -286,6 +293,8 @@ def main() -> None:
     if updates_needed:
         logger.info(
             "⚠ Updates available! Run: summit update  (or: summit auto-update)")
+    elif has_errors:
+        logger.error("✗ Update check incomplete due to errors")
     else:
         logger.info("✓ All caches are up-to-date")
 
