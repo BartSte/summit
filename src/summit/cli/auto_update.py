@@ -92,6 +92,13 @@ def _run(log: IO[str]) -> None:
         # Cache is current but org file is stale — regenerate without re-fetching
         run([sys.executable, "-m", "summit.cli.generate"], check=True)
         p("    ✓ Personal records regenerated")
+        p("    ↳ Syncing regenerated file to Dropbox...")
+        org_file_str = str(org_file)
+        run(
+            ["rclone", "copy", "--ignore-times", org_file_str, "dropbox:/org/"],
+            check=True,
+        )
+        p("    ✓ Synced regenerated file to Dropbox")
         return
 
     p(">>> Updates detected - processing...")

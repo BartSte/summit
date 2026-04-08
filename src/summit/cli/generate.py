@@ -199,3 +199,7 @@ def main() -> None:
     line_count = len(output_file.read_text().splitlines())
     logger.info("✓ Personal records complete — %s (%d lines)",
                 output_file, line_count)
+
+
+if __name__ == "__main__":
+    main()
