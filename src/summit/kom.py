@@ -389,6 +389,23 @@ def match_segment(
     return best
 
 
+def calculate_segment_average_power(
+    points: list[Any], start_idx: int, end_idx: int
+) -> Optional[float]:
+    """Calculate time-weighted average power for a matched point window."""
+    window = points[start_idx:end_idx + 1]
+    weighted_sum = 0.0
+    weighted_duration = 0.0
+    for current, nxt in zip(window, window[1:]):
+        if len(current) <= 4 or current[4] is None or current[2] is None or nxt[2] is None:
+            continue
+        duration_s = (nxt[2] - current[2]).total_seconds()
+        if duration_s > 0:
+            weighted_sum += float(current[4]) * duration_s
+            weighted_duration += duration_s
+    return weighted_sum / weighted_duration if weighted_duration else None
+
+
 def calculate_segment_normalized_power(
     points: list[Any], start_idx: int, end_idx: int
 ) -> Optional[float]:
@@ -563,7 +580,7 @@ def maybe_enrich_segment_power(
     detail_cache: dict[str, list[Any]],
 ) -> None:
     """Backfill segment normalized power from Garmin detail streams."""
-    if entry.get("normalized_power_w") is not None:
+    if entry.get("normalized_power_w") is not None and entry.get("avg_power_w") is not None:
         return
     start_time = (entry.get("startTimeLocal") or "").split(" ")[0]
     if not start_time or start_time < SEGMENT_POWER_STREAM_START:
@@ -584,8 +601,11 @@ def maybe_enrich_segment_power(
     normalized_power_w = calculate_segment_normalized_power(
         detail_points, start_idx, end_idx
     )
+    avg_power_w = calculate_segment_average_power(detail_points, start_idx, end_idx)
     if normalized_power_w is not None:
         entry["normalized_power_w"] = normalized_power_w
+    if avg_power_w is not None:
+        entry["avg_power_w"] = avg_power_w
 
 
 def main() -> None:
@@ -737,6 +757,7 @@ def main() -> None:
             normalized_power_w = calculate_segment_normalized_power(
                 points, start_idx, end_idx
             )
+            avg_power_w = calculate_segment_average_power(points, start_idx, end_idx)
 
             entry = {
                 "id": activity_id,
@@ -745,6 +766,7 @@ def main() -> None:
                 "duration_s": duration,
                 "avg_speed_kmh": avg_speed_kmh,
                 "normalized_power_w": normalized_power_w,
+                "avg_power_w": avg_power_w,
             }
             res["all"].append(entry)
             if res["best_seconds"] is None or duration < res["best_seconds"]:
@@ -776,16 +798,18 @@ def main() -> None:
             else:
                 lines.append("- Best: no matches")
             lines.append("")
-            lines.append("| Rank | Time | Avg speed | Normalized power | Date |")
+            lines.append("| Rank | Time | Avg speed | Avg power | Normalized power | Date |")
             lines.append("|------|------|-----------|-----------|------|")
             for idx, activity in enumerate(data.get("top", [])[:10], 1):
                 time_hms = format_duration(activity["duration_s"])
                 date = (activity.get("startTimeLocal") or "").split()[0]
                 avg_speed = activity.get("avg_speed_kmh", 0)
                 normalized_power = activity.get("normalized_power_w")
+                avg_power = activity.get("avg_power_w")
                 power_str = f"{normalized_power:.0f} W" if normalized_power is not None else ""
+                avg_power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
                 lines.append(
-                    f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {power_str} | {date} |"
+                    f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {avg_power_str} | {power_str} | {date} |"
                 )
             lines.append("")
         return "\n".join(lines)

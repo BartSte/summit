@@ -74,7 +74,7 @@ def _render_org(kom_data: dict) -> str:
             org_lines.append(f"- Matches: {data['matches']} times")
         org_lines.append("")
 
-        org_lines.append("| Rank | Time | Avg speed | Normalized power | Date |")
+        org_lines.append("| Rank | Time | Avg speed | Avg power | Normalized power | Date |")
         org_lines.append("|------|------|-----------|-----------|------|")
 
         for idx, activity in enumerate(data.get('top', [])[:10], 1):
@@ -82,9 +82,11 @@ def _render_org(kom_data: dict) -> str:
             date = activity['startTimeLocal'].split()[0]
             avg_speed = activity.get('avg_speed_kmh', 0)
             normalized_power = activity.get('normalized_power_w')
+            avg_power = activity.get('avg_power_w')
             power_str = f"{normalized_power:.0f} W" if normalized_power is not None else ""
+            avg_power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
             org_lines.append(
-                f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {power_str} | {date} |")
+                f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {avg_power_str} | {power_str} | {date} |")
 
         org_lines.append("")
 

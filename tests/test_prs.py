@@ -351,16 +351,16 @@ class TestComputeBestForDistance:
         assert result is not None
         assert "duration_s" in result
         assert "start_time" in result
-        assert "avg_power_w" in result
+        assert "normalized_power_w" in result
 
-    def test_avg_power_none_when_no_power(self):
+    def test_normalized_power_none_when_no_power(self):
         pts = self._make_straight_points(
             n=20, spacing_m=100.0, seconds_per_point=20.0)
         result = compute_best_for_distance(pts, distance_m=500.0)
         assert result is not None
-        assert result["avg_power_w"] is None
+        assert result["normalized_power_w"] is None
 
-    def test_avg_power_computed_when_present(self):
+    def test_normalized_power_computed_when_present(self):
         from datetime import timedelta
         t0 = datetime(2024, 6, 1, 9, 0, 0)
         lat_step = 100.0 / 111_000
@@ -370,8 +370,8 @@ class TestComputeBestForDistance:
         ]
         result = compute_best_for_distance(pts, distance_m=500.0)
         assert result is not None
-        assert result["avg_power_w"] is not None
-        assert result["avg_power_w"] > 0
+        assert result["normalized_power_w"] is not None
+        assert result["normalized_power_w"] > 0
 
 
 # ---------------------------------------------------------------------------

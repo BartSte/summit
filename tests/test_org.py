@@ -89,7 +89,7 @@ class TestKomJsonToOrg:
 
         result = kom_json_to_org(str(kom_file))
 
-        assert "| Rank | Time | Avg speed | Normalized power | Date |" in result
+        assert "| Rank | Time | Avg speed | Avg power | Normalized power | Date |" in result
         assert "|------|------|-----------|-----------|------|" in result
 
     def test_distance_and_ascent_in_output(self, tmp_path: Path, sample_kom_data: Any):

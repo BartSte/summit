@@ -16,6 +16,12 @@ except Exception:
     Garmin = None
 
 from summit.credentials import get_garmin_client
+from summit.kom import (
+    SEGMENT_POWER_STREAM_START,
+    calculate_segment_average_power,
+    calculate_segment_normalized_power,
+    get_activity_detail_points,
+)
 
 CYCLING_TYPES = {
     "cycling",
@@ -483,14 +489,14 @@ def compute_best_for_distance(
         return None
     duration_s, start_idx, end_idx = best
     start_time = pts[start_idx][2]
-    power_vals = [
-        p[4] for p in pts[start_idx:end_idx + 1]
-        if len(p) > 4 and p[4] is not None
-    ]
-    avg_power_w = sum(power_vals) / len(power_vals) if power_vals else None
+    normalized_power_w = calculate_segment_normalized_power(
+        pts, start_idx, end_idx
+    )
+    avg_power_w = calculate_segment_average_power(pts, start_idx, end_idx)
     return {
         "duration_s": duration_s,
         "start_time": start_time,
+        "normalized_power_w": normalized_power_w,
         "avg_power_w": avg_power_w,
     }
 
@@ -586,9 +592,16 @@ def main() -> None:
                     "startTimeLocal": act.get("startTimeLocal"),
                 })
 
+        analysis_points = points_ds
+        activity_date = (act.get("startTimeLocal") or "").split(" ")[0]
+        if typekey in CYCLING_TYPES and activity_date >= SEGMENT_POWER_STREAM_START:
+            detail_points = get_activity_detail_points(client, activity_id)
+            if detail_points:
+                analysis_points = detail_points
+
         for dist_km, dist_m in zip(distances_km, distances_m):
             best = compute_best_for_distance(
-                points_ds,
+                analysis_points,
                 dist_m,
                 time_mode=args.time_mode,
                 moving_threshold_m=args.moving_threshold_m,
@@ -596,8 +609,6 @@ def main() -> None:
             )
             if not best:
                 continue
-            # Fall back to Garmin's reported avgPower when GPX has no
-            # per-point power data (Garmin strips power from GPX exports).
             if best.get("avg_power_w") is None and activity_avg_power is not None:
                 best["avg_power_w"] = activity_avg_power
             duration = best["duration_s"]
@@ -606,6 +617,7 @@ def main() -> None:
                 "distance_km": dist_km,
                 "duration_s": duration,
                 "avg_kmh": avg_kmh,
+                "normalized_power_w": best.get("normalized_power_w"),
                 "avg_power_w": best.get("avg_power_w"),
                 "activityId": activity_id,
                 "activityName": act.get("activityName"),
@@ -654,7 +666,7 @@ def main() -> None:
             if not rows:
                 lines.append("- no results")
                 continue
-            headers = ["Rank", "Time", "Avg speed", "Avg power", "Date"]
+            headers = ["Rank", "Time", "Avg speed", "Avg power", "Normalized power", "Date"]
             table_rows = []
             for i, r in enumerate(rows, 1):
                 d = r["duration_s"]
@@ -664,12 +676,15 @@ def main() -> None:
                 time_str = f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:d}:{s:02d}"
                 date = (r.get("startTimeLocal") or "").split()[
                     0]  # Extract date only
+                normalized_power = r.get("normalized_power_w")
                 avg_power = r.get("avg_power_w")
-                power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
+                power_str = f"{normalized_power:.0f} W" if normalized_power is not None else ""
+                avg_power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
                 table_rows.append([
                     str(i),
                     time_str,
                     f"{(r.get('avg_kmh') or 0):.1f} km/h",
+                    avg_power_str,
                     power_str,
                     date,
                 ])
