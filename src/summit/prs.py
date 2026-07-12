@@ -46,6 +46,50 @@ def format_power_duration(minutes: float) -> str:
     return f"{int(minutes)} min" if minutes == int(minutes) else f"{minutes:g} min"
 
 
+def compute_best_normalized_power(points: list[Any], duration_s: int) -> dict[str, float] | None:
+    """Return the highest normalized-power window of an exact duration."""
+    pts = [p for p in points if len(p) > 4 and p[2] is not None]
+    if len(pts) < 2 or duration_s < 30:
+        return None
+    total_s = int((pts[-1][2] - pts[0][2]).total_seconds())
+    if total_s < duration_s:
+        return None
+    powers: list[float | None] = []
+    point_idx = 0
+    for second in range(total_s):
+        sample_time = pts[0][2] + timedelta(seconds=second)
+        while point_idx + 1 < len(pts) and pts[point_idx + 1][2] <= sample_time:
+            point_idx += 1
+        power = pts[point_idx][4]
+        powers.append(float(power) if power is not None else None)
+    rolling_fourths: list[float | None] = []
+    for index in range(len(powers) - 29):
+        window = powers[index:index + 30]
+        rolling_fourths.append(None if any(p is None for p in window) else (sum(window) / 30.0) ** 4)  # type: ignore[arg-type]
+    power_prefix = [0.0]
+    power_missing = [0]
+    for power in powers:
+        power_prefix.append(power_prefix[-1] + (power or 0.0))
+        power_missing.append(power_missing[-1] + (power is None))
+    np_prefix = [0.0]
+    np_missing = [0]
+    for value in rolling_fourths:
+        np_prefix.append(np_prefix[-1] + (value or 0.0))
+        np_missing.append(np_missing[-1] + (value is None))
+    best: dict[str, float] | None = None
+    np_count = duration_s - 29
+    for start in range(total_s - duration_s + 1):
+        end = start + duration_s
+        np_end = start + np_count
+        if power_missing[end] != power_missing[start] or np_missing[np_end] != np_missing[start]:
+            continue
+        normalized = ((np_prefix[np_end] - np_prefix[start]) / np_count) ** 0.25
+        average = (power_prefix[end] - power_prefix[start]) / duration_s
+        if best is None or normalized > best["normalized_power_w"]:
+            best = {"normalized_power_w": normalized, "avg_power_w": average}
+    return best
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for the prs command.
 
@@ -587,25 +631,24 @@ def main() -> None:
             {"avg_power_w": activity_avg_power, "max_avg_power": max_avg_power},
         )
 
-        # Collect max avg power PRs from Garmin summary metadata
-        for dur_min in power_durations_min:
-            dur_s = str(int(dur_min * 60))
-            power_w = max_avg_power.get(dur_s)
-            if power_w is not None:
-                power_results[str(dur_min)].append({
-                    "duration_min": dur_min,
-                    "max_avg_power_w": power_w,
-                    "activityId": activity_id,
-                    "activityName": act.get("activityName"),
-                    "startTimeLocal": act.get("startTimeLocal"),
-                })
-
         analysis_points = points_ds
         activity_date = (act.get("startTimeLocal") or "").split(" ")[0]
         if typekey in CYCLING_TYPES and activity_date >= SEGMENT_POWER_STREAM_START:
             detail_points = get_activity_detail_points(client, activity_id)
             if detail_points:
                 analysis_points = detail_points
+
+        if typekey in CYCLING_TYPES and analysis_points is not points_ds:
+            for dur_min in power_durations_min:
+                best_power = compute_best_normalized_power(analysis_points, int(dur_min * 60))
+                if best_power:
+                    power_results[str(dur_min)].append({
+                        "duration_min": dur_min,
+                        **best_power,
+                        "activityId": activity_id,
+                        "activityName": act.get("activityName"),
+                        "startTimeLocal": act.get("startTimeLocal"),
+                    })
 
         for dist_km, dist_m in zip(distances_km, distances_m):
             best = compute_best_for_distance(
@@ -645,7 +688,7 @@ def main() -> None:
     # Sort power results by power descending, keep top N
     for k in list(power_results.keys()):
         power_results[k] = sorted(
-            power_results[k], key=lambda x: x["max_avg_power_w"], reverse=True
+            power_results[k], key=lambda x: x["normalized_power_w"], reverse=True
         )[: args.top]
 
     def render_org(results_dict: dict, power_results_dict: dict) -> str:
@@ -727,7 +770,7 @@ def main() -> None:
             for dur_min_str in power_results_dict:
                 dur_min = float(dur_min_str)
                 dur_labels.append(format_power_duration(dur_min))
-            lines.append("** Max average power")
+            lines.append("** Max normalized power")
             lines.append(f"- Times: {', '.join(dur_labels)}")
             for dur_min_str, entries in power_results_dict.items():
                 dur_min = float(dur_min_str)
@@ -736,14 +779,16 @@ def main() -> None:
                 if not entries:
                     lines.append("- no results")
                     continue
-                headers = ["Rank", "Avg power", "Date"]
+                headers = ["Rank", "Normalized power", "Avg power", "Date"]
                 table_rows = []
                 for i, r in enumerate(entries, 1):
                     date = (r.get("startTimeLocal") or "").split()[0]
-                    power_w = r["max_avg_power_w"]
+                    power_w = r["normalized_power_w"]
+                    avg_power_w = r["avg_power_w"]
                     table_rows.append([
                         str(i),
                         f"{power_w:.0f} W",
+                        f"{avg_power_w:.0f} W",
                         date,
                     ])
                 cols = list(zip(*([headers] + table_rows)))

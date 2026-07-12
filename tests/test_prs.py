@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from summit.prs import (CYCLING_TYPES, cache_meta_path, cache_track_path,
-                        compute_best_for_distance, downsample_activity,
+                        compute_best_for_distance, compute_best_normalized_power, downsample_activity,
                         ensure_cache_dirs, format_power_duration, haversine_m, load_cached_meta,
                         load_cached_track, parse_args, parse_gpx_text,
                         parse_time, resolve_range, save_cached_meta,
@@ -506,3 +506,13 @@ def test_long_power_duration_labels():
     assert format_power_duration(90) == "90 min"
     assert format_power_duration(120) == "2 h"
     assert format_power_duration(360) == "6 h"
+
+
+def test_power_pr_uses_normalized_power_and_keeps_average():
+    from datetime import timedelta
+    start = datetime(2026, 1, 1)
+    points = [(0.0, 0.0, start + timedelta(seconds=i), 0.0, 200.0) for i in range(121)]
+    result = compute_best_normalized_power(points, 120)
+    assert result is not None
+    assert result["normalized_power_w"] == pytest.approx(200.0)
+    assert result["avg_power_w"] == pytest.approx(200.0)
