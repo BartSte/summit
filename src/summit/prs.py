@@ -36,6 +36,14 @@ CYCLING_TYPES = {
 
 DEFAULT_CACHE_DIR = Path("/home/barts/.cache/garmin")
 TRACKS_DIRNAME = "tracks"
+DEFAULT_POWER_DURATIONS_MIN = "1,2,5,10,20,30,60,90,120,180,240,360"
+
+
+def format_power_duration(minutes: float) -> str:
+    """Format power-PR durations compactly while keeping 60/90 minutes explicit."""
+    if minutes >= 120 and minutes % 60 == 0:
+        return f"{int(minutes / 60)} h"
+    return f"{int(minutes)} min" if minutes == int(minutes) else f"{minutes:g} min"
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,9 +88,9 @@ def parse_args() -> argparse.Namespace:
                    default="json", help="Output format (default: json)")
     p.add_argument(
         "--power-durations",
-        default="1,2,5,10,20",
+        default=DEFAULT_POWER_DURATIONS_MIN,
         help="Comma-separated durations in minutes for max avg power PRs "
-             "(e.g. '5,20,60'). Set to '' to disable. Default: '1,2,5,10,20'.",
+             f"(e.g. '5,20,60'). Set to '' to disable. Default: '{DEFAULT_POWER_DURATIONS_MIN}'.",
     )
     return p.parse_args()
 
@@ -569,7 +577,7 @@ def main() -> None:
         # keyed by duration in seconds, used for power PR calculations.
         activity_avg_power = act.get("avgPower")
         max_avg_power: dict[str, float] = {}
-        for dur_s in (60, 120, 300, 600, 1200, 1800, 3600):
+        for dur_s in (60, 120, 300, 600, 1200, 1800, 3600, 5400, 7200, 10800, 14400, 21600):
             val = act.get(f"maxAvgPower_{dur_s}")
             if val is not None:
                 max_avg_power[str(dur_s)] = float(val)
@@ -718,20 +726,12 @@ def main() -> None:
             dur_labels = []
             for dur_min_str in power_results_dict:
                 dur_min = float(dur_min_str)
-                dur_labels.append(
-                    f"{int(dur_min)} min"
-                    if dur_min == int(dur_min)
-                    else f"{dur_min} min"
-                )
+                dur_labels.append(format_power_duration(dur_min))
             lines.append("** Max average power")
             lines.append(f"- Times: {', '.join(dur_labels)}")
             for dur_min_str, entries in power_results_dict.items():
                 dur_min = float(dur_min_str)
-                dur_label = (
-                    f"{int(dur_min)} min"
-                    if dur_min == int(dur_min)
-                    else f"{dur_min} min"
-                )
+                dur_label = format_power_duration(dur_min)
                 lines.append(f"*** {dur_label}")
                 if not entries:
                     lines.append("- no results")

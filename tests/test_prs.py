@@ -8,7 +8,7 @@ import pytest
 
 from summit.prs import (CYCLING_TYPES, cache_meta_path, cache_track_path,
                         compute_best_for_distance, downsample_activity,
-                        ensure_cache_dirs, haversine_m, load_cached_meta,
+                        ensure_cache_dirs, format_power_duration, haversine_m, load_cached_meta,
                         load_cached_track, parse_args, parse_gpx_text,
                         parse_time, resolve_range, save_cached_meta,
                         save_cached_track, want_activity)
@@ -494,3 +494,15 @@ class TestParseArgs:
         out = str(tmp_path / "out.json")
         args = self._parse(["--output", out], monkeypatch)
         assert args.output == out
+
+    def test_default_power_durations_include_long_efforts(self, monkeypatch: pytest.MonkeyPatch):
+        args = self._parse([], monkeypatch)
+        assert args.power_durations.endswith("30,60,90,120,180,240,360")
+
+
+def test_long_power_duration_labels():
+    assert format_power_duration(30) == "30 min"
+    assert format_power_duration(60) == "60 min"
+    assert format_power_duration(90) == "90 min"
+    assert format_power_duration(120) == "2 h"
+    assert format_power_duration(360) == "6 h"
