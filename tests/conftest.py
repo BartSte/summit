@@ -127,7 +127,7 @@ SAMPLE_KOM_DATA = {
             "startTimeLocal": "2024-06-01 09:00:00",
             "duration_s": 330.0,
             "avg_speed_kmh": 25.5,
-            "avg_power_w": 215.0,
+            "normalized_power_w": 215.0,
         },
         "matches": 3,
         "top": [
@@ -137,7 +137,7 @@ SAMPLE_KOM_DATA = {
                 "startTimeLocal": "2024-06-01 09:00:00",
                 "duration_s": 330.0,
                 "avg_speed_kmh": 25.5,
-                "avg_power_w": 215.0,
+                "normalized_power_w": 215.0,
             },
             {
                 "id": 12345680,
@@ -145,7 +145,7 @@ SAMPLE_KOM_DATA = {
                 "startTimeLocal": "2024-06-10 08:30:00",
                 "duration_s": 345.0,
                 "avg_speed_kmh": 24.3,
-                "avg_power_w": None,
+                "normalized_power_w": None,
             },
         ],
         "distance_m": 2350.0,

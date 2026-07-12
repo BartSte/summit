@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 
 from summit.kom import (calculate_distance_m, calculate_elevation_gain_loss,
-                        downsample_points, format_duration, haversine_m,
-                        match_segment, nearest_segment_index, parse_args,
-                        parse_time, read_gpx_points, resolve_range,
-                        want_activity)
+                        calculate_segment_normalized_power, downsample_points,
+                        format_duration, haversine_m, match_segment,
+                        nearest_segment_index, parse_args, parse_time,
+                        read_gpx_points, resolve_range, want_activity)
 
 # ---------------------------------------------------------------------------
 # haversine_m (separate implementation from prs.py — test independently)
@@ -259,6 +259,50 @@ class TestMatchSegment:
         seg_pts = [(51.5000, 0.0, None, None), (51.5010, 0.0, None, None)]
         result = match_segment(act_pts, seg_pts, tolerance_m=25.0)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# calculate_segment_normalized_power
+# ---------------------------------------------------------------------------
+
+class TestCalculateSegmentNormalizedPower:
+    def test_constant_power_equals_normalized_power(self):
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        points = [
+            (51.500 + index * 0.0001, 0.0, t0 + timedelta(seconds=index), None, 250.0)
+            for index in range(61)
+        ]
+
+        result = calculate_segment_normalized_power(points, 0, 60)
+
+        assert result == pytest.approx(250.0)
+
+    def test_variable_effort_exceeds_average_power(self):
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        points = [
+            (
+                51.500 + index * 0.0001,
+                0.0,
+                t0 + timedelta(seconds=index),
+                None,
+                100.0 if index < 30 else 300.0,
+            )
+            for index in range(61)
+        ]
+
+        result = calculate_segment_normalized_power(points, 0, 60)
+
+        assert result is not None
+        assert result > 200.0
+
+    def test_returns_none_for_efforts_shorter_than_30_seconds(self):
+        t0 = datetime(2024, 6, 1, 9, 0, 0)
+        points = [
+            (51.500, 0.0, t0, None, 200.0),
+            (51.501, 0.0, t0 + timedelta(seconds=29), None, 200.0),
+        ]
+
+        assert calculate_segment_normalized_power(points, 0, 1) is None
 
 
 # ---------------------------------------------------------------------------

@@ -74,15 +74,15 @@ def _render_org(kom_data: dict) -> str:
             org_lines.append(f"- Matches: {data['matches']} times")
         org_lines.append("")
 
-        org_lines.append("| Rank | Time | Avg speed | Avg power | Date |")
+        org_lines.append("| Rank | Time | Avg speed | Normalized power | Date |")
         org_lines.append("|------|------|-----------|-----------|------|")
 
         for idx, activity in enumerate(data.get('top', [])[:10], 1):
             time_hms = seconds_to_hms(activity['duration_s'])
             date = activity['startTimeLocal'].split()[0]
             avg_speed = activity.get('avg_speed_kmh', 0)
-            avg_power = activity.get('avg_power_w')
-            power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
+            normalized_power = activity.get('normalized_power_w')
+            power_str = f"{normalized_power:.0f} W" if normalized_power is not None else ""
             org_lines.append(
                 f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {power_str} | {date} |")
 

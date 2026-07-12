@@ -29,6 +29,7 @@ CYCLING_TYPES = {
     "e_bike",
     "cyclocross",
 }
+SEGMENT_POWER_STREAM_START = "2026-04-01"
 
 
 def parse_args() -> argparse.Namespace:
@@ -388,6 +389,55 @@ def match_segment(
     return best
 
 
+def calculate_segment_normalized_power(
+    points: list[Any], start_idx: int, end_idx: int
+) -> Optional[float]:
+    """Calculate normalized power for a matched point window.
+
+    Power is resampled to one-second values using each sample as a
+    piecewise-constant value until the next sample. Normalized power is the
+    fourth root of the mean fourth powers of all complete 30-second rolling
+    averages. Efforts shorter than 30 seconds, or without one complete window
+    of power data, do not have a normalized-power value.
+    """
+    window = points[start_idx:end_idx + 1]
+    if len(window) < 2:
+        return None
+
+    start_time = window[0][2] if len(window[0]) > 2 else None
+    end_time = window[-1][2] if len(window[-1]) > 2 else None
+    if start_time is None or end_time is None:
+        return None
+
+    duration_s = int((end_time - start_time).total_seconds())
+    if duration_s < 30:
+        return None
+
+    second_powers: list[Optional[float]] = []
+    point_idx = 0
+    for second in range(duration_s):
+        sample_time = start_time + timedelta(seconds=second)
+        while (
+            point_idx + 1 < len(window)
+            and window[point_idx + 1][2] is not None
+            and window[point_idx + 1][2] <= sample_time
+        ):
+            point_idx += 1
+        power = window[point_idx][4] if len(window[point_idx]) > 4 else None
+        second_powers.append(float(power) if power is not None else None)
+
+    rolling_averages = []
+    for index in range(len(second_powers) - 29):
+        rolling_window = second_powers[index:index + 30]
+        if any(power is None for power in rolling_window):
+            continue
+        rolling_averages.append(sum(rolling_window) / 30.0)  # type: ignore[arg-type]
+
+    if not rolling_averages:
+        return None
+    return (sum(power ** 4 for power in rolling_averages) / len(rolling_averages)) ** 0.25
+
+
 def format_duration(seconds: float) -> str:
     """Format a duration in seconds as H:MM:SS or M:SS.
 
@@ -460,6 +510,82 @@ class _SegResult(TypedDict):
     distance_m: float
     ascent_m: float
     descent_m: float
+
+
+def get_activity_detail_points(client: Any, activity_id: Any) -> list[Any]:
+    """Load high-resolution activity detail points with power from Garmin."""
+    try:
+        details = client.get_activity_details(str(activity_id))
+    except Exception:
+        return []
+
+    descriptors = details.get("metricDescriptors", [])
+    rows = details.get("activityDetailMetrics", [])
+    idx = {d.get("key"): d.get("metricsIndex") for d in descriptors}
+    required = ["directLatitude", "directLongitude", "directTimestamp"]
+    if any(idx.get(k) is None for k in required):
+        return []
+
+    points = []
+    for row in rows:
+        metrics = row.get("metrics", [])
+        try:
+            lat = metrics[idx["directLatitude"]]
+            lon = metrics[idx["directLongitude"]]
+            ts_ms = metrics[idx["directTimestamp"]]
+        except Exception:
+            continue
+        if lat is None or lon is None or ts_ms is None:
+            continue
+        ele = None
+        ele_idx = idx.get("directElevation")
+        if ele_idx is not None and ele_idx < len(metrics):
+            ele = metrics[ele_idx]
+        power = None
+        power_idx = idx.get("directPower")
+        if power_idx is not None and power_idx < len(metrics):
+            power = metrics[power_idx]
+        points.append((
+            float(lat),
+            float(lon),
+            datetime.fromtimestamp(float(ts_ms) / 1000.0),
+            float(ele) if ele is not None else None,
+            float(power) if power is not None else None,
+        ))
+    return points
+
+
+def maybe_enrich_segment_power(
+    client: Any,
+    entry: dict[str, Any],
+    segment_points: list[Any],
+    tolerance_m: float,
+    detail_cache: dict[str, list[Any]],
+) -> None:
+    """Backfill segment normalized power from Garmin detail streams."""
+    if entry.get("normalized_power_w") is not None:
+        return
+    start_time = (entry.get("startTimeLocal") or "").split(" ")[0]
+    if not start_time or start_time < SEGMENT_POWER_STREAM_START:
+        return
+
+    activity_id = str(entry.get("id"))
+    if not activity_id:
+        return
+    if activity_id not in detail_cache:
+        detail_cache[activity_id] = get_activity_detail_points(client, activity_id)
+    detail_points = detail_cache.get(activity_id) or []
+    if not detail_points:
+        return
+    match = match_segment(detail_points, segment_points, tolerance_m)
+    if not match:
+        return
+    _, start_idx, end_idx = match
+    normalized_power_w = calculate_segment_normalized_power(
+        detail_points, start_idx, end_idx
+    )
+    if normalized_power_w is not None:
+        entry["normalized_power_w"] = normalized_power_w
 
 
 def main() -> None:
@@ -607,13 +733,9 @@ def main() -> None:
             duration_h = duration / 3600.0
             avg_speed_kmh = distance_km / duration_h if duration_h > 0 else 0
 
-            # Calculate average power (W) over the matched segment window
-            power_vals = [
-                p[4] for p in points[start_idx:end_idx + 1]
-                if len(p) > 4 and p[4] is not None
-            ]
-            avg_power_w: Optional[float] = (
-                sum(power_vals) / len(power_vals) if power_vals else None
+            # Calculate normalized power (W) over the matched segment window.
+            normalized_power_w = calculate_segment_normalized_power(
+                points, start_idx, end_idx
             )
 
             entry = {
@@ -622,7 +744,7 @@ def main() -> None:
                 "startTimeLocal": act.get("startTimeLocal"),
                 "duration_s": duration,
                 "avg_speed_kmh": avg_speed_kmh,
-                "avg_power_w": avg_power_w,
+                "normalized_power_w": normalized_power_w,
             }
             res["all"].append(entry)
             if res["best_seconds"] is None or duration < res["best_seconds"]:
@@ -654,14 +776,14 @@ def main() -> None:
             else:
                 lines.append("- Best: no matches")
             lines.append("")
-            lines.append("| Rank | Time | Avg speed | Avg power | Date |")
+            lines.append("| Rank | Time | Avg speed | Normalized power | Date |")
             lines.append("|------|------|-----------|-----------|------|")
             for idx, activity in enumerate(data.get("top", [])[:10], 1):
                 time_hms = format_duration(activity["duration_s"])
                 date = (activity.get("startTimeLocal") or "").split()[0]
                 avg_speed = activity.get("avg_speed_kmh", 0)
-                avg_power = activity.get("avg_power_w")
-                power_str = f"{avg_power:.0f} W" if avg_power is not None else ""
+                normalized_power = activity.get("normalized_power_w")
+                power_str = f"{normalized_power:.0f} W" if normalized_power is not None else ""
                 lines.append(
                     f"| {idx} | {time_hms} | {avg_speed:.1f} km/h | {power_str} | {date} |"
                 )
@@ -671,12 +793,30 @@ def main() -> None:
     # Output
     out = {}
     latest_activity_id = latest_activity["id"] if latest_activity else None
+    detail_cache: dict[str, list[Any]] = {}
+    segment_points_by_name = {s["name"]: s["points"] for s in segments}
     for name, res in results.items():
         sorted_all = sorted(res["all"], key=lambda x: x["duration_s"])
+        top = sorted_all[: args.top]
+        for activity in top:
+            maybe_enrich_segment_power(
+                client,
+                activity,
+                segment_points_by_name.get(name, []),
+                args.tolerance,
+                detail_cache,
+            )
         recent_ride_match = None
         if latest_activity_id is not None:
             for rank, activity in enumerate(sorted_all, 1):
                 if str(activity.get("id")) == str(latest_activity_id):
+                    maybe_enrich_segment_power(
+                        client,
+                        activity,
+                        segment_points_by_name.get(name, []),
+                        args.tolerance,
+                        detail_cache,
+                    )
                     recent_ride_match = {
                         **activity,
                         "rank": rank,
@@ -694,7 +834,6 @@ def main() -> None:
                 "descent_m": res["descent_m"],
             }
         else:
-            top = sorted_all[: args.top]
             out[name] = {
                 "best": format_duration(res["best_seconds"]),
                 "best_seconds": res["best_seconds"],

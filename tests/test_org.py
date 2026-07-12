@@ -89,7 +89,7 @@ class TestKomJsonToOrg:
 
         result = kom_json_to_org(str(kom_file))
 
-        assert "| Rank | Time | Avg speed | Avg power | Date |" in result
+        assert "| Rank | Time | Avg speed | Normalized power | Date |" in result
         assert "|------|------|-----------|-----------|------|" in result
 
     def test_distance_and_ascent_in_output(self, tmp_path: Path, sample_kom_data: Any):
@@ -115,7 +115,7 @@ class TestKomJsonToOrg:
 
         result = kom_json_to_org(str(kom_file))
 
-        # The second entry in SEG-Test Hill has avg_power_w=None → empty power cell
+        # The second entry has normalized_power_w=None → empty power cell
         # The row should contain an empty cell between speed and date: "| ... |  | ..."
         assert "|  |" in result
 

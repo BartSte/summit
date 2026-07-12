@@ -77,13 +77,13 @@ def _render_recent_ride_kom_summary(kom_json: Path) -> str:
         match = data.get("recent_ride_match")
         if not match or str(match.get("id")) != str(latest_ride.get("id")):
             continue
-        avg_power = match.get("avg_power_w")
+        normalized_power = match.get("normalized_power_w")
         rows.append({
             "segment": segment_name.removeprefix("SEG-"),
             "time": _format_duration(match.get("duration_s")),
             "rank": match.get("rank"),
             "avg_speed": f"{match.get('avg_speed_kmh', 0):.1f} km/h",
-            "avg_power": f"{avg_power:.0f} W" if avg_power is not None else "",
+            "normalized_power": f"{normalized_power:.0f} W" if normalized_power is not None else "",
             "status": "KOM" if match.get("is_kom") else "",
         })
 
@@ -103,12 +103,12 @@ def _render_recent_ride_kom_summary(kom_json: Path) -> str:
     lines.append("")
 
     if rows:
-        lines.append("| Segment | Time | Rank | Avg speed | Avg power | Status |")
+        lines.append("| Segment | Time | Rank | Avg speed | Normalized power | Status |")
         lines.append("|---------|------|------|-----------|-----------|--------|")
         for row in rows:
             rank = row["rank"] if row["rank"] is not None else ""
             lines.append(
-                f"| {row['segment']} | {row['time']} | {rank} | {row['avg_speed']} | {row['avg_power']} | {row['status']} |"
+                f"| {row['segment']} | {row['time']} | {rank} | {row['avg_speed']} | {row['normalized_power']} | {row['status']} |"
             )
     else:
         lines.append("- No tracked KOM segments matched on the most recent ride")
