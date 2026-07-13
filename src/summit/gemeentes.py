@@ -150,6 +150,42 @@ def _display_geometry(geometry: Any) -> Any:
         return geometry
 
 
+def _province_display_geometries(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dissolve exact municipality borders before simplifying province outlines."""
+    try:
+        from shapely.geometry import mapping, shape
+        from shapely.ops import unary_union
+    except ImportError:
+        return []
+
+    grouped: dict[tuple[str, str], list[Any]] = {}
+    for feature in features:
+        properties = feature.get("properties", {})
+        code = str(properties.get("ligtInProvincieCode") or "")
+        name = str(properties.get("ligtInProvincieNaam") or "")
+        geometry = feature.get("geometry")
+        if not name or not isinstance(geometry, dict):
+            continue
+        try:
+            candidate = shape(geometry)
+            if not candidate.is_valid:
+                candidate = candidate.buffer(0)
+            if not candidate.is_empty:
+                grouped.setdefault((code, name), []).append(candidate)
+        except (TypeError, ValueError):
+            continue
+
+    provinces = []
+    for (code, name), geometries in sorted(grouped.items(), key=lambda item: item[0][1]):
+        dissolved = unary_union(geometries).simplify(0.0002, preserve_topology=True)
+        provinces.append({
+            "code": code,
+            "name": name,
+            "geometry": json.loads(json.dumps(mapping(dissolved))),
+        })
+    return provinces
+
+
 def generate(
     boundaries: dict[str, Any], tracks_dir: Path, output_file: Path
 ) -> dict[str, Any]:
@@ -287,6 +323,7 @@ def generate(
             "unvisited": len(municipalities) - len(visited),
         },
         "municipalities": municipalities,
+        "provinces": _province_display_geometries(features),
         "activities": {
             activity: {"municipality_codes": codes, "count": len(codes)}
             for activity, codes in sorted(activity_codes.items())

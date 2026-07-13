@@ -102,6 +102,34 @@ def test_generate_scans_track_lists_and_preserves_previous_discovery_state(tmp_p
     assert second["new_gemeentes"] == []
 
 
+def test_generate_dissolves_shared_municipality_edges_in_province_geometry(tmp_path: Path) -> None:
+    from shapely.geometry import LineString, shape
+    from summit.gemeentes import generate
+
+    boundaries = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "properties": {"code": "1", "naam": "West", "ligtInProvincieCode": "P1", "ligtInProvincieNaam": "Noord"},
+                "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+            },
+            {
+                "properties": {"code": "2", "naam": "Oost", "ligtInProvincieCode": "P1", "ligtInProvincieNaam": "Noord"},
+                "geometry": {"type": "Polygon", "coordinates": [[[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]]]},
+            },
+        ],
+    }
+    tracks = tmp_path / "tracks"
+    tracks.mkdir()
+
+    result = generate(boundaries, tracks, tmp_path / "out.json")
+
+    assert [province["name"] for province in result["provinces"]] == ["Noord"]
+    province = shape(result["provinces"][0]["geometry"])
+    assert province.area == pytest.approx(2.0)
+    assert province.boundary.intersection(LineString([(1, 0), (1, 1)])).length == 0
+
+
 def test_generate_ignores_invalid_cache_files_and_counts_each_activity_once(tmp_path: Path) -> None:
     from summit.gemeentes import generate
 
