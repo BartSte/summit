@@ -75,7 +75,9 @@ def _run(log: IO[str]) -> None:
         # the generate step, leaving the org file stale).
         org_file = Path.home() / "dropbox" / "org" / "personal_records.org"
         tracks_dir = Path.home() / ".cache" / "garmin" / "tracks"
+        gemeentes_json = Path.home() / ".cache" / "garmin" / "gemeentes.json"
         needs_regen = False
+        needs_gemeentes_regen = False
         if tracks_dir.exists():
             track_mtimes = [
                 f.stat().st_mtime
@@ -87,6 +89,15 @@ def _run(log: IO[str]) -> None:
                 if not org_file.exists() or org_file.stat().st_mtime < latest_track_mtime:
                     needs_regen = True
                     p("    ↳ personal_records.org is older than cache — regenerating...")
+                if (
+                    not gemeentes_json.exists()
+                    or gemeentes_json.stat().st_mtime < latest_track_mtime
+                ):
+                    needs_gemeentes_regen = True
+        if needs_gemeentes_regen:
+            p("    ↳ gemeentes.json is older than track cache — regenerating...")
+            run([sys.executable, "-m", "summit.gemeentes"], check=True)
+            p("    ✓ Municipality crossings regenerated")
         if not needs_regen:
             return
         # Cache is current but org file is stale — regenerate without re-fetching
@@ -120,6 +131,11 @@ def _run(log: IO[str]) -> None:
         check=True,
     )
     p("    ✓ Activity cache updated")
+
+    # Municipality crossings depend only on the refreshed Garmin track cache.
+    p("    ↳ Regenerating municipality crossings...")
+    run([sys.executable, "-m", "summit.gemeentes"], check=True)
+    p("    ✓ Municipality crossings regenerated")
 
     # Step 2: Update Komoot segments
     p()

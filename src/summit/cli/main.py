@@ -10,6 +10,7 @@ SUBCOMMANDS = {
     "prs":         ("summit.prs",             "cycling/running personal records"),
     "kom":         ("summit.kom",             "segment KOM detection"),
     "activities":  ("summit.activities",      "YTD activity summary"),
+    "gemeentes":   ("summit.gemeentes",       "Dutch municipalities crossed"),
     "check":       ("summit.updates",         "check for new activities/segments"),
     "generate":    ("summit.cli.generate",    "assemble org-mode output"),
     "setup":       ("summit.cli.setup",       "Phase 1 initial cache build"),
